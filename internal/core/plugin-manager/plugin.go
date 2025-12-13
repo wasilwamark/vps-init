@@ -3,13 +3,14 @@ package pluginmanager
 import (
 	"context"
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
 type Plugin struct {
-	config  map[string]interface{}
+	config   map[string]interface{}
 	registry *plugin.Registry
 }
 
@@ -217,6 +218,9 @@ func (p *Plugin) handleReload(ctx context.Context, conn *ssh.Connection, args []
 
 // Cobra command runners
 func (p *Plugin) runList(cmd *cobra.Command, args []string) error {
+	if p.registry == nil {
+		p.registry = plugin.GetBuiltinRegistry()
+	}
 	plugins := p.registry.GetAll()
 
 	if len(plugins) == 0 {

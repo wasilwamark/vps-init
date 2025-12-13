@@ -9,10 +9,10 @@ import (
 )
 
 type Connection struct {
-	Host     string
-	User     string
-	Port     int
-	KeyPath  string
+	Host      string
+	User      string
+	Port      int
+	KeyPath   string
 	connected bool
 }
 
@@ -80,6 +80,31 @@ func (s *Connection) RunCommand(cmd string, check bool) *CommandResult {
 	if check && err != nil {
 		result.Error = err
 	}
+
+	return result
+}
+
+func (s *Connection) RunSudo(cmd, password string) *CommandResult {
+	if password == "" {
+		// Try non-interactive sudo (this will fail if password is required)
+		return s.RunCommand(fmt.Sprintf("sudo -n %s", cmd), false)
+	}
+
+	// Use sudo with password from stdin
+	// -S: read password from stdin
+	// -p '': empty prompt
+	fullCmd := fmt.Sprintf("echo '%s' | sudo -S -p '' %s", password, cmd)
+
+	// We mask the command in the result to avoid leaking password in logs if we had them
+	// But RunCommand doesn't mask inputs.
+	// For security, we should be careful.
+	// However, since we are sending this over SSH, we construct the command string.
+
+	result := s.RunCommand(fullCmd, false)
+
+	// If failed, it might be wrong password or something else.
+	// Clean up the command in the result so we don't accidentally print the password if result is printed
+	result.Command = fmt.Sprintf("sudo %s", cmd)
 
 	return result
 }
