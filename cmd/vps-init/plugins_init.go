@@ -4,6 +4,7 @@ import (
 	"github.com/wasilwamark/vps-init/internal/core/alias"
 	pluginmanager "github.com/wasilwamark/vps-init/internal/core/plugin-manager"
 
+	"github.com/wasilwamark/vps-init/internal/services/docker"
 	"github.com/wasilwamark/vps-init/internal/services/nginx"
 	"github.com/wasilwamark/vps-init/internal/services/system"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
@@ -18,4 +19,5 @@ func initializeBuiltinPlugins() {
 	// Register service plugins
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/system", &system.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/nginx", &nginx.Plugin{})
+	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/docker", &docker.Plugin{})
 }
