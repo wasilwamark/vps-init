@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/ssh"
@@ -103,6 +104,32 @@ func (p *Plugin) Dependencies() []string {
 
 // Command Handlers
 
+// Helper for sudo errors
+func (p *Plugin) checkSudoResult(result *ssh.CommandResult, flags map[string]interface{}) error {
+	if result.Success {
+		return nil
+	}
+
+	// Check if sudo password was provided
+	sudoPass, _ := flags["sudo-password"].(string)
+
+	errMsg := fmt.Sprintf("failed to execute command: %s", result.Stderr)
+
+	// If it looks like a sudo/permission error
+	if strings.Contains(result.Stderr, "sudo") || strings.Contains(result.Stderr, "permission") || strings.Contains(result.Stderr, "password") {
+		if sudoPass == "" {
+			errMsg += "\n\n❌ Root privileges required.\n"
+			errMsg += "Resolution Tips:\n"
+			errMsg += "1. Set environment variable: export SSH_SUDO_PWD_<ALIAS>='your-password'\n"
+			errMsg += "2. OR Update alias with password: vps-init alias add <name> <user@host> --sudo-password 'pass' (will update existing)\n"
+		} else {
+			errMsg += "\n\n❌ Sudo authentication failed. Check your password."
+		}
+	}
+
+	return fmt.Errorf(errMsg)
+}
+
 func (p *Plugin) handleUpdate(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 	fmt.Println("🔄 Updating package lists...")
@@ -110,8 +137,8 @@ func (p *Plugin) handleUpdate(ctx context.Context, conn *ssh.Connection, args []
 	sudoPass, _ := flags["sudo-password"].(string)
 	result := p.ssh.RunSudo("apt-get update", sudoPass)
 
-	if !result.Success {
-		return fmt.Errorf("failed to update package lists: %s", result.Stderr)
+	if err := p.checkSudoResult(result, flags); err != nil {
+		return err
 	}
 
 	fmt.Println("✅ Package lists updated")
@@ -125,8 +152,8 @@ func (p *Plugin) handleUpgrade(ctx context.Context, conn *ssh.Connection, args [
 	sudoPass, _ := flags["sudo-password"].(string)
 	// DEBIAN_FRONTEND=noninteractive to avoid prompts
 	result := p.ssh.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get upgrade -y", sudoPass)
-	if !result.Success {
-		return fmt.Errorf("failed to upgrade packages: %s", result.Stderr)
+	if err := p.checkSudoResult(result, flags); err != nil {
+		return err
 	}
 
 	fmt.Println("✅ Packages upgraded")
@@ -139,8 +166,8 @@ func (p *Plugin) handleFullUpgrade(ctx context.Context, conn *ssh.Connection, ar
 
 	sudoPass, _ := flags["sudo-password"].(string)
 	result := p.ssh.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y", sudoPass)
-	if !result.Success {
-		return fmt.Errorf("failed to perform full upgrade: %s", result.Stderr)
+	if err := p.checkSudoResult(result, flags); err != nil {
+		return err
 	}
 
 	fmt.Println("✅ System fully upgraded")
@@ -153,8 +180,8 @@ func (p *Plugin) handleAutoremove(ctx context.Context, conn *ssh.Connection, arg
 
 	sudoPass, _ := flags["sudo-password"].(string)
 	result := p.ssh.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get autoremove -y", sudoPass)
-	if !result.Success {
-		return fmt.Errorf("failed to autoremove: %s", result.Stderr)
+	if err := p.checkSudoResult(result, flags); err != nil {
+		return err
 	}
 
 	fmt.Println("✅ Unused packages removed")

@@ -11,6 +11,7 @@ import (
 type Config struct {
 	configDir string
 	aliases   map[string]string
+	secrets   map[string]string
 }
 
 func New() *Config {
@@ -20,9 +21,11 @@ func New() *Config {
 	cfg := &Config{
 		configDir: configDir,
 		aliases:   make(map[string]string),
+		secrets:   make(map[string]string),
 	}
 
 	cfg.loadAliases()
+	cfg.loadSecrets()
 	return cfg
 }
 
@@ -90,6 +93,55 @@ func (c *Config) ResolveTarget(target string) string {
 
 	// Return as-is
 	return target
+}
+
+// Secrets Management
+
+func (c *Config) loadSecrets() {
+	if c.secrets == nil {
+		c.secrets = make(map[string]string)
+	}
+
+	secretsFile := filepath.Join(c.configDir, "secrets.json")
+
+	if _, err := os.Stat(secretsFile); os.IsNotExist(err) {
+		return
+	}
+
+	data, err := os.ReadFile(secretsFile)
+	if err != nil {
+		return
+	}
+
+	json.Unmarshal(data, &c.secrets)
+}
+
+func (c *Config) saveSecrets() error {
+	secretsFile := filepath.Join(c.configDir, "secrets.json")
+
+	data, err := json.MarshalIndent(c.secrets, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	// Use 0600 for secrets
+	return os.WriteFile(secretsFile, data, 0600)
+}
+
+func (c *Config) SetSecret(alias, password string) error {
+	if c.secrets == nil {
+		c.secrets = make(map[string]string)
+	}
+	c.secrets[alias] = password
+	return c.saveSecrets()
+}
+
+func (c *Config) GetSecret(alias string) (string, bool) {
+	if c.secrets == nil {
+		return "", false
+	}
+	pass, exists := c.secrets[alias]
+	return pass, exists
 }
 
 type Connection struct {

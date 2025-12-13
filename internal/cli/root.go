@@ -34,13 +34,27 @@ var aliasCmd = &cobra.Command{
 var addAliasCmd = &cobra.Command{
 	Use:   "add <name> <user@host>",
 	Short: "Add a server alias",
-	Args:  cobra.ExactArgs(2),
+	Example: `  vps-init alias add ovh ubuntu@1.2.3.4
+  vps-init alias add ovh ubuntu@1.2.3.4 --sudo-password 'my-secret'`,
+	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.New()
 		if err := cfg.SetAlias(args[0], args[1]); err != nil {
 			fmt.Printf("❌ Failed to add alias: %v\n", err)
 			return
 		}
+
+		// Handle sudo password if flag set
+		sudoPass, _ := cmd.Flags().GetString("sudo-password")
+		if sudoPass != "" {
+			if err := cfg.SetSecret(args[0], sudoPass); err != nil {
+				fmt.Printf("⚠️  Alias added, but failed to save sudo password: %v\n", err)
+			} else {
+				fmt.Printf("✅ Added alias '%s' for %s (with sudo password saved)\n", args[0], args[1])
+				return
+			}
+		}
+
 		fmt.Printf("✅ Added alias '%s' for %s\n", args[0], args[1])
 	},
 }
@@ -80,6 +94,7 @@ var removeAliasCmd = &cobra.Command{
 
 func init() {
 	// Add alias commands
+	addAliasCmd.Flags().String("sudo-password", "", "Optional sudo password for the server")
 	aliasCmd.AddCommand(addAliasCmd)
 	aliasCmd.AddCommand(listAliasesCmd)
 	aliasCmd.AddCommand(removeAliasCmd)
@@ -178,6 +193,11 @@ func executeDirectCommand() {
 
 		if envPass := os.Getenv(envVar); envPass != "" {
 			flags["sudo-password"] = envPass
+		} else {
+			// Check local secrets store
+			if secret, exists := cfg.GetSecret(os.Args[1]); exists {
+				flags["sudo-password"] = secret
+			}
 		}
 	}
 
