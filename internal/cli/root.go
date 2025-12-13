@@ -13,8 +13,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "vps-init",
-	Short: "VPS-Init - Configure your servers with simple commands",
+	Use:     "vps-init",
+	Version: "0.0.1",
+	Short:   "VPS-Init - Configure your servers with simple commands",
 	Long: `VPS-Init is a CLI tool that makes server configuration easy.
 
 Examples:

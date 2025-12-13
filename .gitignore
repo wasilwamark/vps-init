@@ -45,8 +45,8 @@ logs/
 
 # Go
 /bin/
-/dist/
-vps-init
+/dbin/*
+/vps-init
 *.exe
 *.test
 *.prof
