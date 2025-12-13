@@ -65,6 +65,7 @@ Update your OS packages, upgrade, and clean up.
 *   [**Nginx**](docs/plugins/nginx.md): Web server and reverse proxy management.
 *   [**Docker**](docs/plugins/docker.md): Container management.
 *   [**Fail2Ban**](docs/plugins/fail2ban.md): Brute-force protection.
+*   [**Wireguard**](docs/plugins/wireguard.md): Personal VPN with QR code setup.
 *   [**Firewall**](docs/plugins/system.md): (See System/UFW) - *Note: UFW is currently under System/Firewall*
 
 ## 🛠️ Example Usage
