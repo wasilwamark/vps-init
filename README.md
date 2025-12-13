@@ -61,18 +61,11 @@ VPS-Init is built on a modular plugin architecture.
 Update your OS packages, upgrade, and clean up.
 - **Documentation**: [See docs/plugins/system.md](docs/plugins/system.md)
 - **Commands**: `update`, `upgrade`, `full-upgrade`, `autoremove`
-
-### [Nginx Web Server](docs/plugins/nginx.md)
-Install and manage Nginx, sites, and SSL.
-- **Documentation**: [See docs/plugins/nginx.md](docs/plugins/nginx.md)
-- **Commands**: `install`, `add-site`, `remove-site`, `install-ssl`, `logs`, `reload`
-
-### [Docker & Compose](docs/plugins/docker.md)
-One-step Docker setup and management.
-- **Documentation**: [See docs/plugins/docker.md](docs/plugins/docker.md)
-- **Commands**: `install`, `up`, `down`, `logs`, `ps`, `compose`
-
-*(More plugins coming soon: Firewall)*
+*   [**System Management**](docs/plugins/system.md): Update your OS packages, upgrade, and clean up.
+*   [**Nginx**](docs/plugins/nginx.md): Web server and reverse proxy management.
+*   [**Docker**](docs/plugins/docker.md): Container management.
+*   [**Fail2Ban**](docs/plugins/fail2ban.md): Brute-force protection.
+*   [**Firewall**](docs/plugins/system.md): (See System/UFW) - *Note: UFW is currently under System/Firewall*
 
 ## 🛠️ Example Usage
 
