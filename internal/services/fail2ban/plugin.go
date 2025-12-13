@@ -1,0 +1,141 @@
+package fail2ban
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/spf13/cobra"
+	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init/pkg/plugin"
+)
+
+type Plugin struct{}
+
+func (p *Plugin) Name() string {
+	return "fail2ban"
+}
+
+func (p *Plugin) Description() string {
+	return "Protect against brute-force attacks"
+}
+
+func (p *Plugin) Author() string {
+	return "VPS-Init"
+}
+
+func (p *Plugin) Version() string {
+	return "0.0.1"
+}
+
+func (p *Plugin) Initialize(config map[string]interface{}) error {
+	return nil
+}
+
+func (p *Plugin) Start(ctx context.Context) error {
+	return nil
+}
+
+func (p *Plugin) Stop(ctx context.Context) error {
+	return nil
+}
+
+func (p *Plugin) Dependencies() []string {
+	return []string{}
+}
+
+func (p *Plugin) GetRootCommand() *cobra.Command {
+	return nil
+}
+
+func (p *Plugin) GetCommands() []plugin.Command {
+	return []plugin.Command{
+		{
+			Name:        "install",
+			Description: "Install Fail2Ban and configure SSH jail",
+			Handler:     p.installHandler,
+		},
+		{
+			Name:        "status",
+			Description: "Show service status and jails",
+			Handler:     p.statusHandler,
+		},
+		{
+			Name:        "banned",
+			Description: "List banned IPs (default: sshd jail)",
+			Handler:     p.bannedHandler,
+		},
+		{
+			Name:        "unban",
+			Description: "Unban an IP address",
+			Handler:     p.unbanHandler,
+		},
+	}
+}
+
+func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Println("🛡️  Installing Fail2Ban...")
+	pass := getSudoPass(flags)
+
+	// Update & Install
+	// Split into separate commands because RunSudo logic might not handle && well if not wrapped in sh -c
+	if res := conn.RunSudo("apt-get update", pass); !res.Success {
+		return fmt.Errorf("failed to update apt: %s", res.Stderr)
+	}
+	if res := conn.RunSudo("apt-get install -y fail2ban", pass); !res.Success {
+		return fmt.Errorf("failed to install fail2ban: %s", res.Stderr)
+	}
+
+	// Ensure service is running
+	if res := conn.RunSudo("systemctl enable fail2ban", pass); !res.Success {
+		return fmt.Errorf("failed to enable fail2ban: %s", res.Stderr)
+	}
+	if res := conn.RunSudo("systemctl start fail2ban", pass); !res.Success {
+		return fmt.Errorf("failed to start fail2ban: %s", res.Stderr)
+	}
+
+	fmt.Println("✅ Fail2Ban installed and running.")
+	return nil
+}
+
+func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	return conn.RunInteractive("sudo fail2ban-client status")
+}
+
+func (p *Plugin) bannedHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	jail := "sshd"
+	if len(args) > 0 {
+		jail = args[0]
+	}
+
+	fmt.Printf("🔍 Checking banned IPs for jail '%s'...\n", jail)
+	// We use grep to filter just the IP list if possible, or just show the status which contains it.
+	// status <jail> shows "Currently banned: <list>"
+
+	cmd := fmt.Sprintf("sudo fail2ban-client status %s", jail)
+	return conn.RunInteractive(cmd)
+}
+
+func (p *Plugin) unbanHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: unban <ip> [jail]")
+	}
+
+	ip := args[0]
+	jail := "sshd"
+	if len(args) > 1 {
+		jail = args[1]
+	}
+
+	fmt.Printf("🔓 Unbanning %s from %s...\n", ip, jail)
+	cmd := fmt.Sprintf("sudo fail2ban-client set %s unbanip %s", jail, ip)
+
+	return conn.RunInteractive(cmd)
+}
+
+// Helper
+func getSudoPass(flags map[string]interface{}) string {
+	if v, ok := flags["sudo-password"]; ok {
+		return v.(string)
+	}
+	return ""
+}
