@@ -4,12 +4,12 @@ This document outlines the planned plugins to be implemented for VPS-Init. We wi
 
 ## 0. Server Upgrades
 
-*   [ ] **System Upgrade**: Keep the server up-to-date.
-    *   *Features*: Update package lists (`apt update`), upgrade packages (`apt upgrade`), distribution upgrade, and auto-reboot.
+*   [x] **System Upgrade**: Keep the server up-to-date.
+    *   *Features*: Update, Upgrade, Full-Upgrade, Autoremove, Shell Access.
 
 ## 1. Web Servers
 
-*   [ ] **Nginx**: High-performance web server, reverse proxy, and load balancer.
+*   [x] **Nginx**: High-performance web server, reverse proxy, and load balancer.
     *   *Features*: Install, Configure Sites, SSL (Certbot integration).
 *   [ ] **Apache**: Classic, robust web server.
     *   *Features*: Install, Virtual Hosts, Module management.
@@ -29,7 +29,7 @@ This document outlines the planned plugins to be implemented for VPS-Init. We wi
 
 ## 3. Container Management
 
-*   [ ] **Docker**: Standard container platform.
+*   [x] **Docker**: Standard container platform.
     *   *Features*: Install Engine, Run Containers, Manage Compose.
 *   [ ] **Podman**: Daemonless container engine.
     *   *Features*: Install, Container management.
@@ -45,9 +45,9 @@ This document outlines the planned plugins to be implemented for VPS-Init. We wi
 
 ## 5. Security & Utilities
 
-*   [ ] **Fail2Ban**: Intrusion prevention.
+*   [x] **Fail2Ban**: Intrusion prevention.
     *   *Features*: Install, Jail configuration.
 *   [ ] **Certbot**: SSL certificate management.
-    *   *Features*: Install, Obtain certs (standalone or webroot).
-*   [ ] **UFW**: Firewall management.
-    *   *Features*: Enable/Disable, Allow/Deny ports (See Example Plugin).
+    *   *Features*: Install, Obtain certs (standalone or webroot). (Note: Integrated in Nginx plugin)
+*   [x] **UFW**: Firewall management.
+    *   *Features*: Enable/Disable, Allow/Deny ports.
