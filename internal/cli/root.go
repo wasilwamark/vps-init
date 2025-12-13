@@ -6,9 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/config"
-	"github.com/wasilwamark/vps-init/internal/services/nginx"
-	"github.com/wasilwamark/vps-init/internal/services/docker"
-	"github.com/wasilwamark/vps-init/internal/services/monitoring"
 )
 
 var rootCmd = &cobra.Command{
@@ -84,11 +81,6 @@ func init() {
 	aliasCmd.AddCommand(removeAliasCmd)
 	rootCmd.AddCommand(aliasCmd)
 
-	// Add service commands
-	rootCmd.AddCommand(nginx.Command())
-	rootCmd.AddCommand(docker.Command())
-	rootCmd.AddCommand(monitoring.Command())
-
 	// Support direct command execution (vps-init user@host service command)
 	if len(os.Args) > 1 && os.Args[1] != "alias" && os.Args[1] != "help" && os.Args[1] != "--help" && os.Args[1] != "nginx" && os.Args[1] != "docker" && os.Args[1] != "monitoring" {
 		// Direct execution mode
@@ -102,25 +94,16 @@ func executeDirectCommand() {
 		os.Exit(1)
 	}
 
-	target := os.Args[1]
 	service := os.Args[2]
-	command := os.Args[3]
-	args := os.Args[4:]
 
 	// Route to appropriate service
 	switch service {
-	case "nginx":
-		nginx.ExecuteDirect(target, command, args)
-	case "docker":
-		docker.ExecuteDirect(target, command, args)
-	case "monitoring":
-		monitoring.ExecuteDirect(target, command, args)
+
 	default:
 		fmt.Printf("❌ Unknown service: %s\n", service)
-		fmt.Println("Available services: nginx, docker, monitoring")
+		fmt.Println("Available services: (none)")
 		os.Exit(1)
 	}
 
 	os.Exit(0)
 }
-
