@@ -35,3 +35,13 @@ vps-init ovh system update
 ```
 
 The tool will automatically detect the alias `ovh`, look for `SSH_SUDO_PWD_OVH`, and inject the password when running sudo commands.
+
+**Method 2: Stored Secret (Recommended)**
+
+You can save the password securely when adding the alias:
+
+```bash
+vps-init alias add ovh user@host --sudo-password 'your-secret-password'
+```
+
+This saves the password to `~/.vps-init/secrets.json` with restricted permissions. The tool will check this file if the environment variable is not set.
