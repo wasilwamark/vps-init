@@ -67,7 +67,12 @@ Install and manage Nginx, sites, and SSL.
 - **Documentation**: [See docs/plugins/nginx.md](docs/plugins/nginx.md)
 - **Commands**: `install`, `add-site`, `remove-site`, `install-ssl`, `logs`, `reload`
 
-*(More plugins coming soon: Docker, Firewall)*
+### [Docker & Compose](docs/plugins/docker.md)
+One-step Docker setup and management.
+- **Documentation**: [See docs/plugins/docker.md](docs/plugins/docker.md)
+- **Commands**: `install`, `up`, `down`, `logs`, `ps`, `compose`
+
+*(More plugins coming soon: Firewall)*
 
 ## 🛠️ Example Usage
 
