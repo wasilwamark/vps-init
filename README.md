@@ -62,17 +62,22 @@ Update your OS packages, upgrade, and clean up.
 - **Documentation**: [See docs/plugins/system.md](docs/plugins/system.md)
 - **Commands**: `update`, `upgrade`, `full-upgrade`, `autoremove`
 
-*(More plugins coming soon: Nginx, Docker, Firewall)*
+### [Nginx Web Server](docs/plugins/nginx.md)
+Install and manage Nginx, sites, and SSL.
+- **Documentation**: [See docs/plugins/nginx.md](docs/plugins/nginx.md)
+- **Commands**: `install`, `add-site`, `remove-site`, `install-ssl`, `logs`, `reload`
+
+*(More plugins coming soon: Docker, Firewall)*
 
 ## 🛠️ Example Usage
 
 ### Managing System Updates
 ```bash
 # Update package lists
-vps-init production system update
+vps-init myserver system update
 
 # Upgrade all packages
-vps-init production system upgrade
+vps-init myserver system upgrade
 ```
 
 ### Managing Aliases

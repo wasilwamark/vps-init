@@ -167,3 +167,24 @@ type CommandResult struct {
 	Success bool
 	Error   error
 }
+
+// RunInteractive runs a command and streams stdout/stderr to the current process
+// It also connects stdin.
+func (s *Connection) RunInteractive(cmd string) error {
+	sshArgs := []string{
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-p", fmt.Sprintf("%d", s.Port),
+		"-t", // Force pseudo-terminal allocation for interactive feeling
+		"-i", s.KeyPath,
+		fmt.Sprintf("%s@%s", s.User, s.Host),
+		cmd,
+	}
+
+	command := exec.Command("ssh", sshArgs...)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	command.Stdin = os.Stdin
+
+	return command.Run()
+}
