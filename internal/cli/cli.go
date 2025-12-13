@@ -7,8 +7,22 @@ import (
 )
 
 func InitPluginSystem() error {
+	// Initialize FS Loader
+	loader, err := plugin.NewFSLoader(os.ExpandEnv("$HOME/.vps-init/plugins/config.yaml"))
+	if err != nil {
+		return err
+	}
+
+	// Get registry (builtin + fs)
 	registry := plugin.GetBuiltinRegistry()
-	_ = registry // Use registry to avoid unused import error
+	registry.SetLoader(loader)
+
+	// Load all plugins
+	if err := registry.LoadAll(); err != nil {
+		// Log warning but don't fail, maybe just no plugins found
+		// fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+	}
+
 	return nil
 }
 
