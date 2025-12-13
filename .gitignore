@@ -42,3 +42,12 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Go
+/bin/
+/dist/
+vps-init
+*.exe
+*.test
+*.prof
+go.work
