@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/ssh"
 )
@@ -72,14 +73,14 @@ type CommandHandler func(ctx context.Context, conn *ssh.Connection, args []strin
 
 // PluginMetadata contains plugin metadata
 type PluginMetadata struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Version     string            `json:"version"`
-	Author      string            `json:"author"`
-	License     string            `json:"license"`
-	Homepage    string            `json:"homepage"`
-	Repository  string            `json:"repository"`
-	Tags        []string          `json:"tags"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Version     string                 `json:"version"`
+	Author      string                 `json:"author"`
+	License     string                 `json:"license"`
+	Homepage    string                 `json:"homepage"`
+	Repository  string                 `json:"repository"`
+	Tags        []string               `json:"tags"`
 	Config      map[string]interface{} `json:"config,omitempty"`
 }
 
@@ -102,6 +103,11 @@ func NewRegistry(loader PluginLoader) *Registry {
 		plugins: make(map[string]Plugin),
 		loader:  loader,
 	}
+}
+
+// SetLoader sets the plugin loader
+func (r *Registry) SetLoader(loader PluginLoader) {
+	r.loader = loader
 }
 
 // Register registers a plugin
