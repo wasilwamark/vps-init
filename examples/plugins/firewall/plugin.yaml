@@ -1,0 +1,13 @@
+name: firewall
+description: Firewall management plugin
+version: 1.0.0
+author: VPS-Init Team
+license: MIT
+tags:
+  - security
+  - firewall
+  - ufw
+
+config:
+  default_policy: "deny"
+  logging: true

@@ -1,0 +1,44 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+
+# Configuration files
+server.yaml
+terraform.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+
+# Provider credentials
+.env
+.env.local
+.secrets
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
