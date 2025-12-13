@@ -6,8 +6,9 @@ import (
 
 	"github.com/wasilwamark/vps-init/internal/services/docker"
 	"github.com/wasilwamark/vps-init/internal/services/fail2ban"
-	"github.com/wasilwamark/vps-init/internal/services/nginx"
+	"github.com/wasilwamark/vps-init/internal/services/firewall"
 	"github.com/wasilwamark/vps-init/internal/services/system"
+	"github.com/wasilwamark/vps-init/internal/services/wireguard"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -19,7 +20,8 @@ func initializeBuiltinPlugins() {
 
 	// Register service plugins
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/system", &system.Plugin{})
-	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/nginx", &nginx.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/docker", &docker.Plugin{})
+	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/firewall", &firewall.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/fail2ban", &fail2ban.Plugin{})
+	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/wireguard", &wireguard.Plugin{})
 }
