@@ -64,6 +64,21 @@ func (p *Plugin) GetCommands() []plugin.Command {
 			Description: "Remove unused packages",
 			Handler:     p.handleAutoremove,
 		},
+		{
+			Name:        "shell",
+			Description: "Open interactive shell on server",
+			Handler:     p.handleShell,
+		},
+		{
+			Name:        "install",
+			Description: "Install packages (apt install)",
+			Handler:     p.handleInstall,
+		},
+		{
+			Name:        "uninstall",
+			Description: "Uninstall packages (apt remove)",
+			Handler:     p.handleUninstall,
+		},
 	}
 }
 
@@ -185,5 +200,52 @@ func (p *Plugin) handleAutoremove(ctx context.Context, conn *ssh.Connection, arg
 	}
 
 	fmt.Println("✅ Unused packages removed")
+	return nil
+}
+
+func (p *Plugin) handleShell(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Printf("🔌 Connecting to %s@%s...\n", conn.User, conn.Host)
+	return conn.Shell()
+}
+
+func (p *Plugin) handleInstall(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: install <package1> [package2...]")
+	}
+
+	packages := strings.Join(args, " ")
+	fmt.Printf("📦 Installing: %s...\n", packages)
+
+	sudoPass, _ := flags["sudo-password"].(string)
+	// -y to assume yes
+	cmd := fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get install -y %s", packages)
+	result := p.ssh.RunSudo(cmd, sudoPass)
+
+	if err := p.checkSudoResult(result, flags); err != nil {
+		return err
+	}
+
+	fmt.Println("✅ Installation complete")
+	return nil
+}
+
+func (p *Plugin) handleUninstall(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: uninstall <package1> [package2...]")
+	}
+
+	packages := strings.Join(args, " ")
+	fmt.Printf("🗑️  Uninstalling: %s...\n", packages)
+
+	sudoPass, _ := flags["sudo-password"].(string)
+	// -y to assume yes
+	cmd := fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get remove -y %s", packages)
+	result := p.ssh.RunSudo(cmd, sudoPass)
+
+	if err := p.checkSudoResult(result, flags); err != nil {
+		return err
+	}
+
+	fmt.Println("✅ Uninstallation complete")
 	return nil
 }
