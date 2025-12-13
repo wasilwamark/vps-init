@@ -19,9 +19,9 @@ builds:
 archives:
   - format: tar.gz
     name_template: >-
-      {{ .ProjectName }}_
-      {{- .Version }}_
-      {{- .Os }}_
+      {{ .ProjectName }}-
+      {{- .Version }}-
+      {{- .Os }}-
       {{- .Arch }}
 
 checksum:
