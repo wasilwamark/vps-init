@@ -8,14 +8,15 @@ All commands should be run against a target server alias (e.g., `ovh`) or connec
 
 ### Commands
 
-*   `vps-init <target> system update`
-    *   Runs `apt-get update` to refresh package lists.
-*   `vps-init <target> system upgrade`
-    *   Runs `apt-get upgrade -y` to upgrade installed packages.
-*   `vps-init <target> system full-upgrade`
-    *   Runs `apt-get dist-upgrade -y` to perform a full distribution upgrade.
-*   `vps-init <target> system autoremove`
-    *   Runs `apt-get autoremove -y` to remove unused packages.
+| Command | Description | Example |
+| :--- | :--- | :--- |
+| `update` | Updates package lists (`apt-get update`) | `vps-init prod system update` |
+| `upgrade` | Upgrades installed packages | `vps-init prod system upgrade` |
+| `full-upgrade` | Performs dist-upgrade | `vps-init prod system full-upgrade` |
+| `autoremove` | Removes unused packages | `vps-init prod system autoremove` |
+| `install` | Installs specific packages | `vps-init prod system install git curl` |
+| `uninstall` | Removes specific packages | `vps-init prod system uninstall apache2` |
+| `shell` | Opens interactive SSH shell | `vps-init prod system shell` |
 
 ### Sudo Privileges
 

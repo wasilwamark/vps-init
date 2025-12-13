@@ -174,11 +174,34 @@ func (s *Connection) RunInteractive(cmd string) error {
 	sshArgs := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "ServerAliveInterval=60",
+		"-o", "ServerAliveCountMax=120",
 		"-p", fmt.Sprintf("%d", s.Port),
 		"-t", // Force pseudo-terminal allocation for interactive feeling
 		"-i", s.KeyPath,
 		fmt.Sprintf("%s@%s", s.User, s.Host),
 		cmd,
+	}
+
+	command := exec.Command("ssh", sshArgs...)
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	command.Stdin = os.Stdin
+
+	return command.Run()
+}
+
+// Shell opens an interactive shell session
+func (s *Connection) Shell() error {
+	sshArgs := []string{
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "ServerAliveInterval=60",
+		"-o", "ServerAliveCountMax=120",
+		"-p", fmt.Sprintf("%d", s.Port),
+		"-t", // Force pseudo-terminal usage
+		"-i", s.KeyPath,
+		fmt.Sprintf("%s@%s", s.User, s.Host),
 	}
 
 	command := exec.Command("ssh", sshArgs...)
