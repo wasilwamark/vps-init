@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
+
+	"github.com/spf13/cobra"
 
 	"github.com/wasilwamark/vps-init/internal/ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
@@ -259,3 +260,5 @@ func (p *FirewallPlugin) handleDisable(ctx context.Context, conn *ssh.Connection
 	fmt.Println("✅ Firewall disabled")
 	return nil
 }
+
+func main() {}
