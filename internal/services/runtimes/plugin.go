@@ -169,34 +169,40 @@ func (p *Plugin) installNode(ctx context.Context, conn *ssh.Connection, version 
 func (p *Plugin) installPython(ctx context.Context, conn *ssh.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Python %s...\n", version)
 
-	// Install pyenv if not exists
-	if res := conn.RunCommand("command -v pyenv", false); !res.Success {
-		fmt.Println("🔧 Installing pyenv...")
-		installDeps := `apt-get update && apt-get install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev python3-openssl git`
+	// Install uv if not exists
+	if res := conn.RunCommand("command -v uv", false); !res.Success {
+		fmt.Println("🔧 Installing uv...")
+		installDeps := `apt-get update && apt-get install -y curl`
 		if res := conn.RunSudo(installDeps, pass); !res.Success {
-			return fmt.Errorf("failed to install Python build dependencies: %s", res.Stderr)
+			return fmt.Errorf("failed to install dependencies for uv: %s", res.Stderr)
 		}
 
-		installCmd := `curl https://pyenv.run | bash`
+		installCmd := `curl -LsSf https://astral.sh/uv/install.sh | sh`
 		if res := conn.RunCommand(installCmd, false); !res.Success {
-			return fmt.Errorf("failed to install pyenv: %s", res.Stderr)
+			return fmt.Errorf("failed to install uv: %s", res.Stderr)
 		}
 
-		// Add pyenv to shell profile
-		profileCmd := `echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc && echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc && echo 'eval "$(pyenv init -)"' >> ~/.bashrc`
+		// Add uv to PATH
+		profileCmd := `echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc`
 		if res := conn.RunCommand(profileCmd, false); !res.Success {
 			fmt.Printf("⚠️  Failed to update bashrc: %s\n", res.Stderr)
 		}
 	}
 
-	// Install Python version
-	installCmd := fmt.Sprintf(`bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && pyenv install %s && pyenv global %s'`, version, version)
+	// Install Python version using uv
+	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python install %s'`, version)
 	if res := conn.RunCommand(installCmd, false); !res.Success {
 		return fmt.Errorf("failed to install Python %s: %s", version, res.Stderr)
 	}
 
+	// Set the Python version as default
+	pinCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python pin %s'`, version)
+	if res := conn.RunCommand(pinCmd, false); !res.Success {
+		fmt.Printf("⚠️  Failed to pin Python %s: %s\n", version, res.Stderr)
+	}
+
 	// Verify installation
-	verifyCmd := fmt.Sprintf(`bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && python --version && pip --version'`)
+	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv run python --version && uv run pip --version'`)
 	if res := conn.RunCommand(verifyCmd, false); !res.Success {
 		fmt.Printf("⚠️  Failed to verify Python installation: %s\n", res.Stderr)
 	} else {
@@ -417,7 +423,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn *ssh.Connection, args []s
 		extra  string
 	}{
 		{"Node.js", "bash -c 'source ~/.nvm/nvm.sh && nvm list'", ""},
-		{"Python", "bash -c 'export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && pyenv versions'", ""},
+		{"Python", "bash -c 'export PATH=\"$HOME/.cargo/bin:$PATH\" && uv python list'", ""},
 		{"Go", "go version", ""},
 		{"Java", "java -version 2>&1 && javac -version 2>&1", ""},
 		{"Rust", "rustc --version", ""},
@@ -432,7 +438,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn *ssh.Connection, args []s
 			if rt.name == "Node.js" && res.Stdout == "" {
 				fmt.Println("  NVM not installed or no Node.js versions found")
 			} else if rt.name == "Python" && res.Stdout == "" {
-				fmt.Println("  pyenv not installed or no Python versions found")
+				fmt.Println("  uv not installed or no Python versions found")
 			} else if rt.name == "Ruby" && res.Stdout == "" {
 				fmt.Println("  rbenv not installed or no Ruby versions found")
 			} else {
@@ -504,12 +510,12 @@ func (p *Plugin) useNode(ctx context.Context, conn *ssh.Connection, version stri
 func (p *Plugin) usePython(ctx context.Context, conn *ssh.Connection, version string) error {
 	fmt.Printf("🔄 Switching to Python %s...\n", version)
 
-	cmd := fmt.Sprintf(`bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && pyenv global %s'`, version)
+	cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python pin %s'`, version)
 	if res := conn.RunCommand(cmd, false); !res.Success {
 		return fmt.Errorf("failed to switch Python version: %s", res.Stderr)
 	}
 
-	verifyCmd := fmt.Sprintf(`bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && python --version'`)
+	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv run python --version'`)
 	res := conn.RunCommand(verifyCmd, false)
 	if !res.Success {
 		return fmt.Errorf("failed to verify Python version: %s", res.Stderr)
@@ -526,6 +532,7 @@ func (p *Plugin) removeHandler(ctx context.Context, conn *ssh.Connection, args [
 
 	language := strings.ToLower(args[0])
 	version := args[1]
+	pass := getSudoPass(flags)
 
 	switch language {
 	case "node", "nodejs", "node.js":
@@ -534,14 +541,101 @@ func (p *Plugin) removeHandler(ctx context.Context, conn *ssh.Connection, args [
 			return fmt.Errorf("failed to uninstall Node.js %s: %s", version, res.Stderr)
 		}
 		fmt.Printf("✅ Node.js %s uninstalled\n", version)
+
 	case "python", "py", "python3":
-		cmd := fmt.Sprintf(`bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && pyenv uninstall %s'`, version)
+		cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python uninstall %s'`, version)
 		if res := conn.RunCommand(cmd, false); !res.Success {
 			return fmt.Errorf("failed to uninstall Python %s: %s", version, res.Stderr)
 		}
 		fmt.Printf("✅ Python %s uninstalled\n", version)
+
+	case "go", "golang":
+		// Check if Go is installed in /usr/local/go
+		checkCmd := fmt.Sprintf(`/usr/local/go/bin/go version | grep 'go%s'`, version)
+		if res := conn.RunCommand(checkCmd, false); !res.Success {
+			return fmt.Errorf("Go %s not found in /usr/local/go", version)
+		}
+
+		// Remove Go installation
+		removeCmd := fmt.Sprintf(`sudo rm -rf /usr/local/go%s && sudo rm -rf /usr/local/go`, version)
+		if res := conn.RunSudo(removeCmd, pass); !res.Success {
+			return fmt.Errorf("failed to remove Go %s: %s", version, res.Stderr)
+		}
+
+		// Remove PATH entries from bashrc
+		cleanupCmd := `sed -i '/export PATH=\$PATH:\/usr\/local\/go\/bin/d' ~/.bashrc && sed -i '/export GOPATH=\$HOME\/go/d' ~/.bashrc && sed -i '/export PATH=\$PATH:\$GOPATH\/bin/d' ~/.bashrc`
+		conn.RunCommand(cleanupCmd, false)
+
+		fmt.Printf("✅ Go %s uninstalled\n", version)
+
+	case "java", "jdk":
+		// Find Java installation
+		findCmd := fmt.Sprintf(`ls /usr/lib/jvm/ | grep -E 'java-%s-openjdk' | head -n 1`, version)
+		res := conn.RunCommand(findCmd, false)
+		if !res.Success || strings.TrimSpace(res.Stdout) == "" {
+			return fmt.Errorf("Java %s not found in /usr/lib/jvm", version)
+		}
+
+		javaDir := strings.TrimSpace(res.Stdout)
+
+		// Remove Java installation
+		removeCmd := fmt.Sprintf(`sudo rm -rf /usr/lib/jvm/%s`, javaDir)
+		if res := conn.RunSudo(removeCmd, pass); !res.Success {
+			return fmt.Errorf("failed to remove Java %s: %s", version, res.Stderr)
+		}
+
+		// Remove JAVA_HOME from bashrc
+		cleanupCmd := `sed -i '/export JAVA_HOME/d' ~/.bashrc`
+		conn.RunCommand(cleanupCmd, false)
+
+		fmt.Printf("✅ Java %s uninstalled\n", version)
+
+	case "rust":
+		// Use rustup to uninstall
+		cmd := fmt.Sprintf(`bash -c 'source ~/.bashrc && rustup self uninstall -y'`)
+		if res := conn.RunCommand(cmd, false); !res.Success {
+			// Fallback: manually remove rust
+			removeCmd := `rm -rf ~/.cargo && rm -rf ~/.rustup`
+			if res := conn.RunCommand(removeCmd, false); !res.Success {
+				return fmt.Errorf("failed to remove Rust: %s", res.Stderr)
+			}
+		}
+
+		// Remove PATH entries from bashrc
+		cleanupCmd := `sed -i '/export PATH="\$HOME\/\.cargo\/bin:\$PATH"/d' ~/.bashrc`
+		conn.RunCommand(cleanupCmd, false)
+
+		fmt.Printf("✅ Rust uninstalled\n")
+
+	case "php":
+		// Remove PHP packages
+		removeCmd := fmt.Sprintf(`sudo apt-get remove -y php%s php%s-cli php%s-fpm php%s-mbstring php%s-xml php%s-curl`, version, version, version, version, version, version)
+		if res := conn.RunSudo(removeCmd, pass); !res.Success {
+			return fmt.Errorf("failed to remove PHP %s: %s", version, res.Stderr)
+		}
+
+		fmt.Printf("✅ PHP %s uninstalled\n", version)
+
+	case "ruby":
+		// Use rbenv to uninstall
+		cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv uninstall %s'`, version)
+		if res := conn.RunCommand(cmd, false); !res.Success {
+			return fmt.Errorf("failed to uninstall Ruby %s: %s", version, res.Stderr)
+		}
+
+		fmt.Printf("✅ Ruby %s uninstalled\n", version)
+
+	case "dotnet", ".net", "net":
+		// Remove .NET SDK
+		removeCmd := fmt.Sprintf(`sudo apt-get remove -y dotnet-sdk-%s`, version)
+		if res := conn.RunSudo(removeCmd, pass); !res.Success {
+			return fmt.Errorf("failed to remove .NET %s: %s", version, res.Stderr)
+		}
+
+		fmt.Printf("✅ .NET %s uninstalled\n", version)
+
 	default:
-		return fmt.Errorf("runtime removal not supported for %s", language)
+		return fmt.Errorf("runtime removal not supported for %s. Supported languages: node, python, go, java, rust, php, ruby, dotnet", language)
 	}
 
 	return nil
@@ -556,7 +650,7 @@ func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args [
 		cmd  string
 	}{
 		{"Node.js", `bash -c 'source ~/.nvm/nvm.sh && echo "Node: $(node --version 2>/dev/null || echo "Not found")" && echo "NPM: $(npm --version 2>/dev/null || echo "Not found")"'`},
-		{"Python", `bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && echo "Python: $(python --version 2>/dev/null || echo "Not found")" && echo "Pip: $(pip --version 2>/dev/null || echo "Not found")"'`},
+		{"Python", `bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && echo "Python: $(uv run python --version 2>/dev/null || echo "Not found")" && echo "Pip: $(uv run pip --version 2>/dev/null || echo "Not found")" && echo "UV: $(uv --version 2>/dev/null || echo "Not found")"'`},
 		{"Go", "bash -c 'echo \"Go: $(/usr/local/go/bin/go version 2>/dev/null || /usr/bin/go version 2>/dev/null || echo \"Not found\")\"'"},
 		{"Java", "bash -c 'echo \"Java: $(java -version 2>&1 | head -n 1 || echo \"Not found\")\"'"},
 		{"Rust", "bash -c 'echo \"Rust: $(/home/ubuntu/.cargo/bin/rustc --version 2>/dev/null || /usr/bin/rustc --version 2>/dev/null || echo \"Not found\")\"'"},
@@ -589,10 +683,10 @@ func (p *Plugin) updateHandler(ctx context.Context, conn *ssh.Connection, args [
 		fmt.Println("  NVM update failed or not installed")
 	}
 
-	// Update pyenv
-	fmt.Println("\n📦 Updating pyenv...")
-	if res := conn.RunCommand(`bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$PATH" && eval "$(pyenv init -)" && pyenv update'`, false); !res.Success {
-		fmt.Println("  pyenv update failed or not installed")
+	// Update uv
+	fmt.Println("\n📦 Updating uv...")
+	if res := conn.RunCommand(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv self update'`, false); !res.Success {
+		fmt.Println("  uv update failed or not installed")
 	}
 
 	// Update rbenv

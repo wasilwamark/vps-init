@@ -5,7 +5,7 @@ The Language Runtimes plugin provides a unified interface for managing programmi
 ## Supported Languages
 
 - **Node.js** - Managed via NVM (Node Version Manager)
-- **Python** - Managed via pyenv
+- **Python** - Managed via uv (ultra-fast Python package installer and resolver)
 - **Go** - Direct installation
 - **Java** - OpenJDK via apt (versions 8, 11, 17, 21)
 - **Rust** - Managed via rustup
@@ -88,7 +88,7 @@ vps-init <server> runtimes update
 The plugin automatically installs and configures version managers for supported languages:
 
 - **NVM** for Node.js - Allows installing multiple Node.js versions
-- **pyenv** for Python - Allows installing multiple Python versions
+- **uv** for Python - Ultra-fast Python package installer and resolver that manages Python versions
 - **rbenv** for Ruby - Allows installing multiple Ruby versions
 - **rustup** for Rust - Manages Rust toolchains
 
@@ -124,14 +124,17 @@ vps-init myserver runtimes status
 ### Setting up a Python Environment
 
 ```bash
-# Install Python 3.11 with pyenv
+# Install Python 3.11 with uv
 vps-init myserver runtimes install python 3.11
 
 # List available Python versions
 vps-init myserver runtimes list
 
-# Install additional packages if needed
-vps-init myserver system cmd "pip install virtualenv"
+# Install additional packages if needed (using uv)
+vps-init myserver system cmd "uv pip install virtualenv"
+
+# Or use uv run for project-specific commands
+vps-init myserver system cmd "uv run python -m venv myenv"
 ```
 
 ### Multi-Language Setup
