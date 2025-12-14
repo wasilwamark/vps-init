@@ -49,5 +49,5 @@ This document outlines the planned plugins to be implemented for VPS-Init. We wi
     *   *Features*: Install, Jail configuration.
 *   [ ] **Certbot**: SSL certificate management.
     *   *Features*: Install, Obtain certs (standalone or webroot). (Note: Integrated in Nginx plugin)
-*   [x] **UFW**: Firewall management.
+*   [] **UFW**: Firewall management.
     *   *Features*: Enable/Disable, Allow/Deny ports.

@@ -68,6 +68,7 @@ Update your OS packages, upgrade, and clean up.
 *   [**Wireguard**](docs/plugins/wireguard.md): Personal VPN with QR code setup.
 *   [**MySQL/MariaDB**](docs/plugins/mysql.md): Database management.
 *   [**WordPress**](docs/plugins/wordpress.md): Automated LEMP stack & site deployment.
+*   [**Restic**](docs/plugins/restic.md): S3 Backups for Files and Databases.
 *   [**Firewall**](docs/plugins/system.md): (See System/UFW) - *Note: UFW is currently under System/Firewall*
 
 ## 🛠️ Example Usage
