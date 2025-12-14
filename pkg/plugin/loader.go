@@ -15,16 +15,16 @@ import (
 // Config represents plugin configuration
 type Config struct {
 	Plugins map[string]PluginConfig `yaml:"plugins" json:"plugins"`
-	Paths   []string                  `yaml:"paths" json:"paths"`
+	Paths   []string                `yaml:"paths" json:"paths"`
 }
 
 // PluginConfig represents individual plugin configuration
 type PluginConfig struct {
-	Enabled   bool                   `yaml:"enabled" json:"enabled"`
-	Path      string                 `yaml:"path" json:"path"`
-	Config    map[string]interface{} `yaml:"config" json:"config"`
-	Import    string                 `yaml:"import" json:"import"`
-	Remote    *RemotePlugin          `yaml:"remote" json:"remote"`
+	Enabled bool                   `yaml:"enabled" json:"enabled"`
+	Path    string                 `yaml:"path" json:"path"`
+	Config  map[string]interface{} `yaml:"config" json:"config"`
+	Import  string                 `yaml:"import" json:"import"`
+	Remote  *RemotePlugin          `yaml:"remote" json:"remote"`
 }
 
 // RemotePlugin represents a remote plugin configuration
@@ -236,6 +236,11 @@ func (l *FSLoader) discoverPlugins() ([]Plugin, error) {
 		// Expand ~
 		expandedPath := os.ExpandEnv(path)
 		expandedPath = strings.Replace(expandedPath, "~", os.Getenv("HOME"), 1)
+
+		// Check if path exists before walking
+		if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+			continue
+		}
 
 		// Walk directory
 		err := filepath.Walk(expandedPath, func(path string, info os.FileInfo, err error) error {
