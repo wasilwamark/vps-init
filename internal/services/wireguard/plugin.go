@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/ssh"
@@ -266,10 +267,205 @@ PersistentKeepalive = 25
 }
 
 func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	// Removing logic is harder with text file parsing without a tool.
-	// wg set wg0 peer <pubkey> remove works for runtime, but config file persistence is tricky without 'wg-quick save' overwriting formats.
-	// For MVP, implementing remove is risky without parsing.
-	return fmt.Errorf("remove-peer not implemented in this version (edit /etc/wireguard/wg0.conf manually)")
+	pass := getSudoPass(flags)
+
+	// Get the config file to list peers
+	configRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if !configRes.Success {
+		return fmt.Errorf("failed to read config file: %s", configRes.Stderr)
+	}
+
+	// Parse peers and build list
+	lines := strings.Split(configRes.Stdout, "\n")
+	var peers []struct {
+		name    string
+		pubKey  string
+		allowed string
+	}
+
+	var currentName, currentPubKey, currentAllowed string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[Peer]") {
+			// Save previous peer if exists
+			if currentPubKey != "" {
+				peers = append(peers, struct {
+					name    string
+					pubKey  string
+					allowed string
+				}{currentName, currentPubKey, currentAllowed})
+			}
+			currentName, currentPubKey, currentAllowed = "", "", ""
+			continue
+		}
+		if strings.HasPrefix(line, "# Name =") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				currentName = strings.TrimSpace(parts[1])
+			}
+		}
+		if strings.HasPrefix(line, "PublicKey =") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				currentPubKey = strings.TrimSpace(parts[1])
+			}
+		}
+		if strings.HasPrefix(line, "AllowedIPs =") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				currentAllowed = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	// Save last peer if exists
+	if currentPubKey != "" {
+		peers = append(peers, struct {
+			name    string
+			pubKey  string
+			allowed string
+		}{currentName, currentPubKey, currentAllowed})
+	}
+
+	if len(peers) == 0 {
+		fmt.Println("❌ No peers found in configuration")
+		return nil
+	}
+
+	// Display peers for selection
+	fmt.Println("📋 Available WireGuard Peers:")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	for i, peer := range peers {
+		displayName := peer.name
+		if displayName == "" {
+			displayName = "Unnamed"
+		}
+		fmt.Printf(" [%d] %s (%s)\n", i+1, displayName, peer.allowed)
+	}
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("Select peer to remove (1-%d): ", len(peers))
+
+	// Get user input
+	var choice int
+	fmt.Scanf("%d", &choice)
+
+	if choice < 1 || choice > len(peers) {
+		return fmt.Errorf("invalid selection: %d", choice)
+	}
+
+	selectedPeer := peers[choice-1]
+	displayName := selectedPeer.name
+	if displayName == "" {
+		displayName = "Unnamed"
+	}
+
+	// Confirm removal
+	fmt.Printf("\n⚠️  Are you sure you want to remove peer '%s' (%s)? [y/N]: ", displayName, selectedPeer.allowed)
+	var confirm string
+	fmt.Scanf("%s", &confirm)
+
+	if strings.ToLower(confirm) != "y" && strings.ToLower(confirm) != "yes" {
+		fmt.Println("❌ Operation cancelled")
+		return nil
+	}
+
+	// Remove peer from runtime
+	fmt.Printf("🗑️  Removing peer '%s' from WireGuard...\n", displayName)
+	removeRes := conn.RunSudo(fmt.Sprintf("wg set wg0 peer %s remove", selectedPeer.pubKey), pass)
+	if !removeRes.Success {
+		return fmt.Errorf("failed to remove peer from runtime: %s", removeRes.Stderr)
+	}
+
+	// Remove from config file
+	// Create new config without the selected peer
+	var newConfig []string
+	i := 0
+
+	for i < len(lines) {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "[Peer]") {
+			// Check if this is the peer to remove by looking for its public key
+			isTargetPeer := false
+			// Look ahead for the PublicKey
+			for j := i + 1; j < len(lines) && j < i + 10; j++ {
+				nextLine := strings.TrimSpace(lines[j])
+				if strings.HasPrefix(nextLine, "PublicKey =") {
+					parts := strings.SplitN(nextLine, "=", 2)
+					if len(parts) == 2 {
+						pubKey := strings.TrimSpace(parts[1])
+						if pubKey == selectedPeer.pubKey {
+							isTargetPeer = true
+						}
+					}
+					break
+				}
+				// If we hit another [Peer] or [Interface], this peer doesn't have a public key
+				if strings.HasPrefix(nextLine, "[") {
+					break
+				}
+			}
+
+			if isTargetPeer {
+				// Skip this entire peer section
+				// Advance i until we hit the next section or end
+				i++
+				for i < len(lines) {
+					nextTrimmed := strings.TrimSpace(lines[i])
+					if strings.HasPrefix(nextTrimmed, "[") {
+						// We've reached the next section, don't advance i so it gets processed
+						break
+					}
+					if nextTrimmed == "" {
+						// Check if the next line starts a new section
+						if i+1 < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i+1]), "[") {
+							// Skip the empty line too
+							i++
+							break
+						}
+					}
+					i++
+				}
+				continue
+			} else {
+				// This is not the peer to remove, add it
+				newConfig = append(newConfig, line)
+			}
+		} else {
+			// Not a peer section, add the line
+			newConfig = append(newConfig, line)
+		}
+		i++
+	}
+
+	// Write new config
+	newConfigStr := strings.Join(newConfig, "\n")
+	tmpPath := "/tmp/wg0_new.conf"
+	if !conn.WriteFile(newConfigStr, tmpPath) {
+		return fmt.Errorf("failed to write new config")
+	}
+
+	// Backup and replace config
+	backupPath := fmt.Sprintf("/etc/wireguard/wg0.conf.bak.%d", time.Now().Unix())
+	conn.RunSudo(fmt.Sprintf("cp /etc/wireguard/wg0.conf %s", backupPath), pass)
+
+	if res := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpPath), pass); !res.Success {
+		return fmt.Errorf("failed to update config file: %s", res.Stderr)
+	}
+
+	// Reload configuration
+	fmt.Println("🔄 Reloading WireGuard configuration...")
+	reloadRes := conn.RunSudo("wg-quick down wg0 && wg-quick up wg0", pass)
+	if !reloadRes.Success {
+		// Try alternative reload method
+		conn.RunSudo("wg syncconf wg0 <(wg-quick strip wg0)", pass)
+	}
+
+	fmt.Printf("✅ Peer '%s' removed successfully!\n", displayName)
+	fmt.Printf("💾 Backup saved to: %s\n", backupPath)
+
+	return nil
 }
 
 func (p *Plugin) listPeersHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
