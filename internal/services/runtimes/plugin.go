@@ -172,7 +172,7 @@ func (p *Plugin) installPython(ctx context.Context, conn *ssh.Connection, versio
 	// Install uv if not exists
 	if res := conn.RunCommand("command -v uv", false); !res.Success {
 		fmt.Println("🔧 Installing uv...")
-		installDeps := `apt-get update && apt-get install -y curl`
+		installDeps := `apt-get update 2>/dev/null || true && apt-get install -y curl`
 		if res := conn.RunSudo(installDeps, pass); !res.Success {
 			return fmt.Errorf("failed to install dependencies for uv: %s", res.Stderr)
 		}
@@ -182,27 +182,31 @@ func (p *Plugin) installPython(ctx context.Context, conn *ssh.Connection, versio
 			return fmt.Errorf("failed to install uv: %s", res.Stderr)
 		}
 
-		// Add uv to PATH
-		profileCmd := `echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc`
+		// Add uv to PATH (uv installs to ~/.local/bin)
+		profileCmd := `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc`
 		if res := conn.RunCommand(profileCmd, false); !res.Success {
 			fmt.Printf("⚠️  Failed to update bashrc: %s\n", res.Stderr)
 		}
+
+		// Export PATH for current session
+		exportCmd := `export PATH="$HOME/.local/bin:$PATH"`
+		conn.RunCommand(exportCmd, false)
 	}
 
 	// Install Python version using uv
-	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python install %s'`, version)
+	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python install %s'`, version)
 	if res := conn.RunCommand(installCmd, false); !res.Success {
 		return fmt.Errorf("failed to install Python %s: %s", version, res.Stderr)
 	}
 
 	// Set the Python version as default
-	pinCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python pin %s'`, version)
+	pinCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python pin %s'`, version)
 	if res := conn.RunCommand(pinCmd, false); !res.Success {
 		fmt.Printf("⚠️  Failed to pin Python %s: %s\n", version, res.Stderr)
 	}
 
 	// Verify installation
-	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv run python --version && uv run pip --version'`)
+	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv run python --version && uv run pip --version'`)
 	if res := conn.RunCommand(verifyCmd, false); !res.Success {
 		fmt.Printf("⚠️  Failed to verify Python installation: %s\n", res.Stderr)
 	} else {
@@ -216,20 +220,28 @@ func (p *Plugin) installPython(ctx context.Context, conn *ssh.Connection, versio
 func (p *Plugin) installGo(ctx context.Context, conn *ssh.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Go %s...\n", version)
 
+	// Format version string for Go download URLs
+	goVersion := version
+	if !strings.Contains(version, ".") {
+		goVersion = version + ".22.0"  // Default to latest patch for major version
+	} else if len(strings.Split(version, ".")) == 2 {
+		goVersion = version + ".0"  // Add patch version if missing
+	}
+
 	// Download and install Go
-	downloadCmd := fmt.Sprintf(`wget https://go.dev/dl/go%s.linux-amd64.tar.gz -O /tmp/go%s.linux-amd64.tar.gz`, version, version)
+	downloadCmd := fmt.Sprintf(`wget https://go.dev/dl/go%s.linux-amd64.tar.gz -O /tmp/go%s.linux-amd64.tar.gz`, goVersion, goVersion)
 	if res := conn.RunCommand(downloadCmd, false); !res.Success {
 		return fmt.Errorf("failed to download Go: %s", res.Stderr)
 	}
 
 	// Extract Go to /usr/local
-	extractCmd := fmt.Sprintf(`sudo tar -C /usr/local -xzf /tmp/go%s.linux-amd64.tar.gz`, version)
+	extractCmd := fmt.Sprintf(`sudo tar -C /usr/local -xzf /tmp/go%s.linux-amd64.tar.gz`, goVersion)
 	if res := conn.RunSudo(extractCmd, pass); !res.Success {
 		return fmt.Errorf("failed to extract Go: %s", res.Stderr)
 	}
 
 	// Remove the tar file
-	cleanupCmd := fmt.Sprintf(`rm /tmp/go%s.linux-amd64.tar.gz`, version)
+	cleanupCmd := fmt.Sprintf(`rm /tmp/go%s.linux-amd64.tar.gz`, goVersion)
 	conn.RunCommand(cleanupCmd, false)
 
 	// Add Go to PATH
@@ -257,13 +269,13 @@ func (p *Plugin) installJava(ctx context.Context, conn *ssh.Connection, version 
 	// Install OpenJDK
 	var installCmd string
 	if strings.HasPrefix(version, "8") {
-		installCmd = "apt-get update && apt-get install -y openjdk-8-jdk"
+		installCmd = "apt-get update 2>/dev/null || true && apt-get install -y openjdk-8-jdk"
 	} else if strings.HasPrefix(version, "11") {
-		installCmd = "apt-get update && apt-get install -y openjdk-11-jdk"
+		installCmd = "apt-get update 2>/dev/null || true && apt-get install -y openjdk-11-jdk"
 	} else if strings.HasPrefix(version, "17") {
-		installCmd = "apt-get update && apt-get install -y openjdk-17-jdk"
+		installCmd = "apt-get update 2>/dev/null || true && apt-get install -y openjdk-17-jdk"
 	} else if strings.HasPrefix(version, "21") {
-		installCmd = "apt-get update && apt-get install -y openjdk-21-jdk"
+		installCmd = "apt-get update 2>/dev/null || true && apt-get install -y openjdk-21-jdk"
 	} else {
 		return fmt.Errorf("unsupported Java version: %s. Supported versions: 8, 11, 17, 21", version)
 	}
@@ -306,8 +318,12 @@ func (p *Plugin) installRust(ctx context.Context, conn *ssh.Connection, version 
 		fmt.Printf("⚠️  Failed to update bashrc: %s\n", res.Stderr)
 	}
 
+	// Export PATH for current session
+	exportCmd := `export PATH="$HOME/.cargo/bin:$PATH"`
+	conn.RunCommand(exportCmd, false)
+
 	// Verify installation
-	verifyCmd := `bash -c 'source ~/.bashrc && rustc --version && cargo --version'`
+	verifyCmd := `bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && rustc --version && cargo --version'`
 	if res := conn.RunCommand(verifyCmd, false); !res.Success {
 		fmt.Printf("⚠️  Failed to verify Rust installation: %s\n", res.Stderr)
 	} else {
@@ -321,24 +337,43 @@ func (p *Plugin) installRust(ctx context.Context, conn *ssh.Connection, version 
 func (p *Plugin) installPHP(ctx context.Context, conn *ssh.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing PHP %s...\n", version)
 
-	// Add PPA for newer PHP versions
+	// Add PPA for newer PHP versions, but handle gracefully if it fails
 	if version > "8.0" {
-		ppaCmd := `apt-get install -y software-properties-common && add-apt-repository -y ppa:ondrej/php`
+		ppaCmd := `apt-get install -y software-properties-common && add-apt-repository -y ppa:ondrej/php 2>/dev/null || true`
 		if res := conn.RunSudo(ppaCmd, pass); !res.Success {
-			fmt.Printf("⚠️  Failed to add PHP PPA: %s\n", res.Stderr)
+			fmt.Printf("⚠️  Failed to add PHP PPA, trying with default repositories\n")
 		}
 	}
 
 	// Install PHP
-	installCmd := fmt.Sprintf("apt-get update && apt-get install -y php%s php%s-cli php%s-fpm php%s-mbstring php%s-xml php%s-curl", version, version, version, version, version, version)
+	var installCmd string
+	if version == "8" {
+		installCmd = "apt-get update 2>/dev/null || true && apt-get install -y php8.1 php8.1-cli php8.1-fpm php8.1-mbstring php8.1-xml php8.1-curl"
+	} else if strings.HasPrefix(version, "8.") {
+		installCmd = fmt.Sprintf("apt-get update 2>/dev/null || true && apt-get install -y php%s php%s-cli php%s-fpm php%s-mbstring php%s-xml php%s-curl", version, version, version, version, version, version)
+	} else {
+		installCmd = fmt.Sprintf("apt-get update 2>/dev/null || true && apt-get install -y php%s php%s-cli php%s-fpm php%s-mbstring php%s-xml php%s-curl", version, version, version, version, version, version)
+	}
 	if res := conn.RunSudo(installCmd, pass); !res.Success {
-		return fmt.Errorf("failed to install PHP %s: %s", version, res.Stderr)
+		// Fallback to default PHP version if specific version fails
+		fmt.Printf("⚠️  PHP %s not available, trying with default PHP version...\n", version)
+		fallbackCmd := "apt-get update 2>/dev/null || true && apt-get install -y php php-cli php-fpm php-mbstring php-xml php-curl"
+		if res := conn.RunSudo(fallbackCmd, pass); !res.Success {
+			return fmt.Errorf("failed to install PHP: %s", res.Stderr)
+		}
 	}
 
 	// Verify installation
 	verifyCmd := fmt.Sprintf("php%s --version", version)
 	if res := conn.RunCommand(verifyCmd, false); !res.Success {
-		fmt.Printf("⚠️  Failed to verify PHP installation: %s\n", res.Stderr)
+		// Fallback to generic php command if version-specific fails
+		verifyCmd = "php --version"
+		if res := conn.RunCommand(verifyCmd, false); !res.Success {
+			fmt.Printf("⚠️  Failed to verify PHP installation: %s\n", res.Stderr)
+		} else {
+			fmt.Printf("✅ PHP installed successfully!\n")
+			fmt.Println(res.Stdout)
+		}
 	} else {
 		fmt.Printf("✅ PHP %s installed successfully!\n", version)
 		fmt.Println(res.Stdout)
@@ -350,16 +385,28 @@ func (p *Plugin) installPHP(ctx context.Context, conn *ssh.Connection, version s
 func (p *Plugin) installRuby(ctx context.Context, conn *ssh.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Ruby %s...\n", version)
 
+	// Format Ruby version for rbenv
+	rubyVersion := version
+	if version == "3" {
+		rubyVersion = "3.3.0"  // Default to latest stable 3.x
+	} else if len(strings.Split(version, ".")) == 1 {
+		rubyVersion = version + ".0.0"  // Add minor and patch if missing
+	} else if len(strings.Split(version, ".")) == 2 {
+		rubyVersion = version + ".0"  // Add patch version if missing
+	}
+
 	// Install Ruby using rbenv
-	installDeps := `apt-get update && apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm-dev git`
+	installDeps := `apt-get update 2>/dev/null || true && apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm-dev git`
 	if res := conn.RunSudo(installDeps, pass); !res.Success {
 		return fmt.Errorf("failed to install Ruby build dependencies: %s", res.Stderr)
 	}
 
-	// Install rbenv
-	rbenvCmd := `git clone https://github.com/rbenv/rbenv.git ~/.rbenv && git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build`
-	if res := conn.RunCommand(rbenvCmd, false); !res.Success {
-		return fmt.Errorf("failed to install rbenv: %s", res.Stderr)
+	// Install rbenv (check if already installed first)
+	if res := conn.RunCommand("test -d ~/.rbenv", false); !res.Success {
+		rbenvCmd := `git clone https://github.com/rbenv/rbenv.git ~/.rbenv && git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build`
+		if res := conn.RunCommand(rbenvCmd, false); !res.Success {
+			return fmt.Errorf("failed to install rbenv: %s", res.Stderr)
+		}
 	}
 
 	// Add rbenv to PATH
@@ -369,7 +416,7 @@ func (p *Plugin) installRuby(ctx context.Context, conn *ssh.Connection, version 
 	}
 
 	// Install Ruby version
-	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv install %s && rbenv global %s'`, version, version)
+	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv install %s --skip-existing && rbenv global %s'`, rubyVersion, rubyVersion)
 	if res := conn.RunCommand(installCmd, false); !res.Success {
 		return fmt.Errorf("failed to install Ruby %s: %s", version, res.Stderr)
 	}
@@ -379,7 +426,7 @@ func (p *Plugin) installRuby(ctx context.Context, conn *ssh.Connection, version 
 	if res := conn.RunCommand(verifyCmd, false); !res.Success {
 		fmt.Printf("⚠️  Failed to verify Ruby installation: %s\n", res.Stderr)
 	} else {
-		fmt.Printf("✅ Ruby %s installed successfully!\n", version)
+		fmt.Printf("✅ Ruby %s installed successfully!\n", rubyVersion)
 		fmt.Println(res.Stdout)
 	}
 
@@ -389,14 +436,27 @@ func (p *Plugin) installRuby(ctx context.Context, conn *ssh.Connection, version 
 func (p *Plugin) installDotNet(ctx context.Context, conn *ssh.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing .NET %s...\n", version)
 
+	// Detect Ubuntu version
+	ubuntuVersion := "20.04"
+	if res := conn.RunCommand(`lsb_release -rs | cut -d. -f1`, false); res.Success {
+		ver := strings.TrimSpace(res.Stdout)
+		if ver == "22" || ver == "24" {
+			ubuntuVersion = ver + ".04"
+		}
+	}
+
 	// Add Microsoft package repository
-	repoCmd := `apt-get update && apt-get install -y wget && wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && dpkg -i packages-microsoft-prod.deb`
+	repoCmd := fmt.Sprintf(`apt-get update 2>/dev/null || true && apt-get install -y wget && wget https://packages.microsoft.com/config/ubuntu/%s/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && dpkg -i packages-microsoft-prod.deb`, ubuntuVersion)
 	if res := conn.RunSudo(repoCmd, pass); !res.Success {
 		return fmt.Errorf("failed to add Microsoft repository: %s", res.Stderr)
 	}
 
 	// Install .NET SDK
-	installCmd := fmt.Sprintf("apt-get update && apt-get install -y dotnet-sdk-%s", version)
+	dotnetVersion := version
+	if len(strings.Split(version, ".")) == 1 {
+		dotnetVersion = version + ".0"
+	}
+	installCmd := fmt.Sprintf("apt-get update 2>/dev/null || true && apt-get install -y dotnet-sdk-%s", dotnetVersion)
 	if res := conn.RunSudo(installCmd, pass); !res.Success {
 		return fmt.Errorf("failed to install .NET %s: %s", version, res.Stderr)
 	}
@@ -423,7 +483,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn *ssh.Connection, args []s
 		extra  string
 	}{
 		{"Node.js", "bash -c 'source ~/.nvm/nvm.sh && nvm list'", ""},
-		{"Python", "bash -c 'export PATH=\"$HOME/.cargo/bin:$PATH\" && uv python list'", ""},
+		{"Python", "bash -c 'export PATH=\"$HOME/.local/bin:$PATH\" && uv python list'", ""},
 		{"Go", "go version", ""},
 		{"Java", "java -version 2>&1 && javac -version 2>&1", ""},
 		{"Rust", "rustc --version", ""},
@@ -510,12 +570,12 @@ func (p *Plugin) useNode(ctx context.Context, conn *ssh.Connection, version stri
 func (p *Plugin) usePython(ctx context.Context, conn *ssh.Connection, version string) error {
 	fmt.Printf("🔄 Switching to Python %s...\n", version)
 
-	cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python pin %s'`, version)
+	cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python pin %s'`, version)
 	if res := conn.RunCommand(cmd, false); !res.Success {
 		return fmt.Errorf("failed to switch Python version: %s", res.Stderr)
 	}
 
-	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv run python --version'`)
+	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv run python --version'`)
 	res := conn.RunCommand(verifyCmd, false)
 	if !res.Success {
 		return fmt.Errorf("failed to verify Python version: %s", res.Stderr)
@@ -543,7 +603,7 @@ func (p *Plugin) removeHandler(ctx context.Context, conn *ssh.Connection, args [
 		fmt.Printf("✅ Node.js %s uninstalled\n", version)
 
 	case "python", "py", "python3":
-		cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv python uninstall %s'`, version)
+		cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python uninstall %s'`, version)
 		if res := conn.RunCommand(cmd, false); !res.Success {
 			return fmt.Errorf("failed to uninstall Python %s: %s", version, res.Stderr)
 		}
@@ -650,7 +710,7 @@ func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args [
 		cmd  string
 	}{
 		{"Node.js", `bash -c 'source ~/.nvm/nvm.sh && echo "Node: $(node --version 2>/dev/null || echo "Not found")" && echo "NPM: $(npm --version 2>/dev/null || echo "Not found")"'`},
-		{"Python", `bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && echo "Python: $(uv run python --version 2>/dev/null || echo "Not found")" && echo "Pip: $(uv run pip --version 2>/dev/null || echo "Not found")" && echo "UV: $(uv --version 2>/dev/null || echo "Not found")"'`},
+		{"Python", `bash -c 'export PATH="$HOME/.local/bin:$PATH" && echo "Python: $(uv run python --version 2>/dev/null || echo "Not found")" && echo "Pip: $(uv run pip --version 2>/dev/null || echo "Not found")" && echo "UV: $(uv --version 2>/dev/null || echo "Not found")"'`},
 		{"Go", "bash -c 'echo \"Go: $(/usr/local/go/bin/go version 2>/dev/null || /usr/bin/go version 2>/dev/null || echo \"Not found\")\"'"},
 		{"Java", "bash -c 'echo \"Java: $(java -version 2>&1 | head -n 1 || echo \"Not found\")\"'"},
 		{"Rust", "bash -c 'echo \"Rust: $(/home/ubuntu/.cargo/bin/rustc --version 2>/dev/null || /usr/bin/rustc --version 2>/dev/null || echo \"Not found\")\"'"},
@@ -685,7 +745,7 @@ func (p *Plugin) updateHandler(ctx context.Context, conn *ssh.Connection, args [
 
 	// Update uv
 	fmt.Println("\n📦 Updating uv...")
-	if res := conn.RunCommand(`bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && uv self update'`, false); !res.Success {
+	if res := conn.RunCommand(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv self update'`, false); !res.Success {
 		fmt.Println("  uv update failed or not installed")
 	}
 
