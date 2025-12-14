@@ -12,7 +12,6 @@ import (
 
 // Plugin implements the system upgrade plugin
 type Plugin struct {
-	ssh    *ssh.Connection
 	config map[string]interface{}
 }
 
@@ -146,11 +145,10 @@ func (p *Plugin) checkSudoResult(result *ssh.CommandResult, flags map[string]int
 }
 
 func (p *Plugin) handleUpdate(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	p.ssh = conn
 	fmt.Println("🔄 Updating package lists...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	result := p.ssh.RunSudo("apt-get update", sudoPass)
+	result := conn.RunSudo("apt-get update", sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
@@ -161,12 +159,11 @@ func (p *Plugin) handleUpdate(ctx context.Context, conn *ssh.Connection, args []
 }
 
 func (p *Plugin) handleUpgrade(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	p.ssh = conn
 	fmt.Println("⬆️  Upgrading packages...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
 	// DEBIAN_FRONTEND=noninteractive to avoid prompts
-	result := p.ssh.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get upgrade -y", sudoPass)
+	result := conn.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get upgrade -y", sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
 	}
@@ -176,11 +173,10 @@ func (p *Plugin) handleUpgrade(ctx context.Context, conn *ssh.Connection, args [
 }
 
 func (p *Plugin) handleFullUpgrade(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	p.ssh = conn
 	fmt.Println("🚀 Performing full system upgrade...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	result := p.ssh.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y", sudoPass)
+	result := conn.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y", sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
 	}
@@ -190,11 +186,10 @@ func (p *Plugin) handleFullUpgrade(ctx context.Context, conn *ssh.Connection, ar
 }
 
 func (p *Plugin) handleAutoremove(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	p.ssh = conn
 	fmt.Println("🧹 Removing unused packages...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	result := p.ssh.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get autoremove -y", sudoPass)
+	result := conn.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get autoremove -y", sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
 	}
@@ -219,7 +214,7 @@ func (p *Plugin) handleInstall(ctx context.Context, conn *ssh.Connection, args [
 	sudoPass, _ := flags["sudo-password"].(string)
 	// -y to assume yes
 	cmd := fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get install -y %s", packages)
-	result := p.ssh.RunSudo(cmd, sudoPass)
+	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
@@ -240,7 +235,7 @@ func (p *Plugin) handleUninstall(ctx context.Context, conn *ssh.Connection, args
 	sudoPass, _ := flags["sudo-password"].(string)
 	// -y to assume yes
 	cmd := fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get remove -y %s", packages)
-	result := p.ssh.RunSudo(cmd, sudoPass)
+	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
