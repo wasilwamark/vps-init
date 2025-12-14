@@ -159,10 +159,34 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	}
 
 	// Get Server Public Key
-	res := conn.RunSudo("cat /etc/wireguard/wg0.conf | grep PrivateKey | cut -d = -f 2", pass)
-	sPriv := strings.TrimSpace(res.Stdout)
+	res := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if !res.Success {
+		return fmt.Errorf("failed to read server config: %s", res.Stderr)
+	}
+
+	// Parse the config to extract the private key
+	lines := strings.Split(res.Stdout, "\n")
+	var sPriv string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "PrivateKey") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				sPriv = strings.TrimSpace(parts[1])
+				break
+			}
+		}
+	}
+
+	if sPriv == "" {
+		return fmt.Errorf("server private key not found in config")
+	}
+
 	// Derive public from private because getting it from wg show might require it running
 	sPubRes := conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", sPriv), false)
+	if !sPubRes.Success {
+		return fmt.Errorf("failed to derive server public key: %s", sPubRes.Stderr)
+	}
 	sPub := strings.TrimSpace(sPubRes.Stdout)
 
 	// Find available IP
@@ -216,13 +240,21 @@ AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
 `, cPriv, clientAddr, sPub, endpoint)
 
-	fmt.Printf("\n📋 Client Config for %s:\n", name)
-	fmt.Println("-------------------------------------------")
+	// Display client information
+	fmt.Printf("\n✅ Peer %s added successfully!\n\n", name)
+
+	fmt.Printf("📱 Client Configuration:\n")
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Printf("🔑 Client Public Key: %s\n", cPub)
+	fmt.Printf("🌐 Server Endpoint: %s\n", endpoint)
+	fmt.Printf("📍 Client IP: %s\n", clientAddr)
+	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+
+	fmt.Printf("📄 Complete Client Config for %s:\n", name)
 	fmt.Println(clientConfig)
-	fmt.Println("-------------------------------------------")
 
 	// Generate QR Code
-	fmt.Println("\n📱 Scan this QR Code to connect:")
+	fmt.Printf("\n📱 Scan this QR Code to add to your Wireguard client:\n")
 	// Write to tmp file then qrencode
 	tmpClient := fmt.Sprintf("/tmp/%s.conf", name)
 	conn.WriteFile(clientConfig, tmpClient)
@@ -230,7 +262,6 @@ PersistentKeepalive = 25
 
 	// Clean up
 	conn.RunSudo(fmt.Sprintf("rm %s", tmpClient), pass)
-	fmt.Printf("\n✅ Peer %s added.\n", name)
 	return nil
 }
 
