@@ -194,14 +194,16 @@ AllowedIPs = %s
 	// Append to server config
 	tmpPeer := "/tmp/wg_peer_add"
 	conn.WriteFile(peerBlock, tmpPeer)
-	if res := conn.RunSudo(fmt.Sprintf("cat %s >> /etc/wireguard/wg0.conf", tmpPeer), pass); !res.Success {
-		return fmt.Errorf("failed to update server config")
+	if res := conn.RunSudo(fmt.Sprintf("bash -c 'cat %s >> /etc/wireguard/wg0.conf'", tmpPeer), pass); !res.Success {
+		return fmt.Errorf("failed to update server config: %s", res.Stderr)
 	}
 
 	// Reload Server
-	conn.RunSudo("wg syncconf wg0 <(wg-quick strip wg0)", pass)
+	conn.RunSudo("bash -c 'wg syncconf wg0 <(wg-quick strip wg0)'", pass)
 
 	// create Client Config
+	// Remove /32 suffix from clientIP for Address field - just use the IP
+	clientAddr := strings.Replace(clientIP, "/32", "", 1)
 	clientConfig := fmt.Sprintf(`[Interface]
 PrivateKey = %s
 Address = %s
@@ -212,7 +214,7 @@ PublicKey = %s
 Endpoint = %s
 AllowedIPs = 0.0.0.0/0
 PersistentKeepalive = 25
-`, cPriv, strings.Replace(clientIP, "/32", "/24", 1), sPub, endpoint)
+`, cPriv, clientAddr, sPub, endpoint)
 
 	fmt.Printf("\n📋 Client Config for %s:\n", name)
 	fmt.Println("-------------------------------------------")
