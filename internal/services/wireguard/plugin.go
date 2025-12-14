@@ -273,7 +273,71 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, ar
 }
 
 func (p *Plugin) listPeersHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	return conn.RunInteractive("sudo wg show")
+	pass := getSudoPass(flags)
+
+	// Get the current WireGuard status
+	res := conn.RunSudo("wg show", pass)
+	if !res.Success {
+		return fmt.Errorf("failed to get wg status: %s", res.Stderr)
+	}
+
+	// Parse the config file to get peer names
+	configRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if !configRes.Success {
+		return fmt.Errorf("failed to read config file: %s", configRes.Stderr)
+	}
+
+	// Build a map of public keys to device names
+	peerNames := make(map[string]string)
+	lines := strings.Split(configRes.Stdout, "\n")
+	var currentName string
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[Peer]") {
+			currentName = ""
+			continue
+		}
+		if strings.HasPrefix(line, "# Name =") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				currentName = strings.TrimSpace(parts[1])
+			}
+		}
+		if strings.HasPrefix(line, "PublicKey =") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 && currentName != "" {
+				pubKey := strings.TrimSpace(parts[1])
+				peerNames[pubKey] = currentName
+				currentName = ""
+			}
+		}
+	}
+
+	// Parse the wg show output and replace public keys with names
+	output := res.Stdout
+	lines = strings.Split(output, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "peer:") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				pubKey := parts[1]
+				if name, exists := peerNames[pubKey]; exists {
+					fmt.Printf("peer: %s (%s)\n", pubKey, name)
+				} else {
+					fmt.Println(line)
+				}
+			} else {
+				fmt.Println(line)
+			}
+		} else {
+			fmt.Println(line)
+		}
+	}
+
+	return nil
 }
 
 func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
