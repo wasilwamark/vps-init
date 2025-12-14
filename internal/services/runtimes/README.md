@@ -1,6 +1,6 @@
-# Language Runtimes Plugin
+# Language Runtime Plugin
 
-The Language Runtimes plugin provides a unified interface for managing programming language runtimes on your VPS. It supports multiple popular programming languages and handles version management using standard version managers.
+The Language Runtime plugin provides a unified interface for managing programming language runtime on your VPS. It supports multiple popular programming languages and handles version management using standard version managers.
 
 ## Supported Languages
 
@@ -19,66 +19,66 @@ The Language Runtimes plugin provides a unified interface for managing programmi
 
 ```bash
 # Install Node.js version 18
-vps-init <server> runtimes install node 18
+vps-init <server> runtime install node 18
 
 # Install Python 3.11
-vps-init <server> runtimes install python 3.11
+vps-init <server> runtime install python 3.11
 
 # Install Go 1.21
-vps-init <server> runtimes install go 1.21
+vps-init <server> runtime install go 1.21
 
 # Install Java 17
-vps-init <server> runtimes install java 17
+vps-init <server> runtime install java 17
 
 # Install Rust
-vps-init <server> runtimes install rust latest
+vps-init <server> runtime install rust latest
 
 # Install PHP 8.2
-vps-init <server> runtimes install php 8.2
+vps-init <server> runtime install php 8.2
 
 # Install Ruby 3.2
-vps-init <server> runtimes install ruby 3.2
+vps-init <server> runtime install ruby 3.2
 
 # Install .NET 7
-vps-init <server> runtimes install dotnet 7
+vps-init <server> runtime install dotnet 7
 ```
 
-### List Installed Runtimes
+### List Installed Runtime
 
 ```bash
-vps-init <server> runtimes list
+vps-init <server> runtime list
 ```
 
 ### Switch Between Versions
 
 ```bash
 # Switch to Node.js 16
-vps-init <server> runtimes use node 16
+vps-init <server> runtime use node 16
 
 # Switch to Python 3.10
-vps-init <server> runtimes use python 3.10
+vps-init <server> runtime use python 3.10
 ```
 
 ### Show Current Status
 
 ```bash
-vps-init <server> runtimes status
+vps-init <server> runtime status
 ```
 
 ### Remove a Runtime Version
 
 ```bash
 # Remove Node.js 14
-vps-init <server> runtimes remove node 14
+vps-init <server> runtime remove node 14
 
 # Remove Python 3.9
-vps-init <server> runtimes remove python 3.9
+vps-init <server> runtime remove python 3.9
 ```
 
 ### Update Version Managers
 
 ```bash
-vps-init <server> runtimes update
+vps-init <server> runtime update
 ```
 
 ## Features
@@ -96,7 +96,7 @@ The plugin automatically installs and configures version managers for supported 
 
 The plugin automatically:
 - Updates shell profiles (`~/.bashrc`) with necessary environment variables
-- Configures PATH for all installed runtimes
+- Configures PATH for all installed runtime
 - Sets up version-specific aliases where applicable
 
 ### Version Detection
@@ -112,23 +112,23 @@ The plugin can:
 
 ```bash
 # Install Node.js 18 with NVM
-vps-init myserver runtimes install node 18
+vps-init myserver runtime install node 18
 
 # Switch to Node.js 16 for a legacy project
-vps-init myserver runtimes use node 16
+vps-init myserver runtime use node 16
 
 # Check current status
-vps-init myserver runtimes status
+vps-init myserver runtime status
 ```
 
 ### Setting up a Python Environment
 
 ```bash
 # Install Python 3.11 with uv
-vps-init myserver runtimes install python 3.11
+vps-init myserver runtime install python 3.11
 
 # List available Python versions
-vps-init myserver runtimes list
+vps-init myserver runtime list
 
 # Install additional packages if needed (using uv)
 vps-init myserver system cmd "uv pip install virtualenv"
@@ -140,14 +140,14 @@ vps-init myserver system cmd "uv run python -m venv myenv"
 ### Multi-Language Setup
 
 ```bash
-# Install multiple language runtimes
-vps-init myserver runtimes install node 18
-vps-init myserver runtimes install python 3.11
-vps-init myserver runtimes install go 1.21
-vps-init myserver runtimes install java 17
+# Install multiple language runtime
+vps-init myserver runtime install node 18
+vps-init myserver runtime install python 3.11
+vps-init myserver runtime install go 1.21
+vps-init myserver runtime install java 17
 
-# Check all installed runtimes
-vps-init myserver runtimes status
+# Check all installed runtime
+vps-init myserver runtime status
 ```
 
 ## Dependencies

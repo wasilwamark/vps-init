@@ -71,7 +71,7 @@ VPS-Init is built on a modular plugin architecture.
 *   [**MySQL/MariaDB**](docs/plugins/mysql.md): Database management.
 *   [**WordPress**](docs/plugins/wordpress.md): Automated LEMP stack & site deployment.
 *   [**Restic**](docs/plugins/restic.md): S3 Backups for Files and Databases.
-*   [**Language Runtimes**](internal/services/runtimes/README.md): Manage programming language runtimes (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
+*   [**Language Runtime**](internal/services/runtimes/README.md): Manage programming language runtime (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
 
 ### System Utilities
 
@@ -88,34 +88,34 @@ vps-init myserver system update
 vps-init myserver system upgrade
 ```
 
-### Managing Language Runtimes
+### Managing Language Runtime
 ```bash
 # Install Node.js 18 with NVM
-vps-init myserver runtimes install node 18
+vps-init myserver runtime install node 18
 
 # Install Python 3.11 with pyenv
-vps-init myserver runtimes install python 3.11
+vps-init myserver runtime install python 3.11
 
 # Install Go 1.21
-vps-init myserver runtimes install go 1.21
+vps-init myserver runtime install go 1.21
 
 # Install Java 17
-vps-init myserver runtimes install java 17
+vps-init myserver runtime install java 17
 
-# List all installed runtimes
-vps-init myserver runtimes list
+# List all installed runtime
+vps-init myserver runtime list
 
 # Check current active versions
-vps-init myserver runtimes status
+vps-init myserver runtime status
 
 # Switch Node.js versions
-vps-init myserver runtimes use node 16
+vps-init myserver runtime use node 16
 
 # Install multiple languages for a development environment
-vps-init myserver runtimes install node 18
-vps-init myserver runtimes install python 3.11
-vps-init myserver runtimes install go 1.21
-vps-init myserver runtimes install rust latest
+vps-init myserver runtime install node 18
+vps-init myserver runtime install python 3.11
+vps-init myserver runtime install go 1.21
+vps-init myserver runtime install rust latest
 ```
 
 ### Managing Aliases

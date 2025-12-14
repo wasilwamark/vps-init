@@ -28,11 +28,11 @@ type LanguageRuntime struct {
 }
 
 func (p *Plugin) Name() string {
-	return "runtimes"
+	return "runtime"
 }
 
 func (p *Plugin) Description() string {
-	return "Manage programming language runtimes (Node.js, Python, Go, Java, etc.)"
+	return "Manage programming language runtime (Node.js, Python, Go, Java, etc.)"
 }
 
 func (p *Plugin) Author() string {
@@ -72,7 +72,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 		},
 		{
 			Name:        "list",
-			Description: "List available and installed runtimes",
+			Description: "List available and installed runtime",
 			Handler:     p.listHandler,
 		},
 		{
@@ -87,7 +87,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 		},
 		{
 			Name:        "status",
-			Description: "Show current active runtimes",
+			Description: "Show current active runtime",
 			Handler:     p.statusHandler,
 		},
 		{
@@ -100,7 +100,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: runtimes install <language> <version> [options]\n\nExample: runtimes install node 18\nExample: runtimes install python 3.11\nExample: runtimes install go 1.21")
+		return fmt.Errorf("usage: runtime install <language> <version> [options]\n\nExample: runtime install node 18\nExample: runtime install python 3.11\nExample: runtime install go 1.21")
 	}
 
 	language := strings.ToLower(args[0])
@@ -527,7 +527,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn *ssh.Connection, args []s
 
 func (p *Plugin) useHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: runtimes use <language> <version>")
+		return fmt.Errorf("usage: runtime use <language> <version>")
 	}
 
 	language := strings.ToLower(args[0])
@@ -587,7 +587,7 @@ func (p *Plugin) usePython(ctx context.Context, conn *ssh.Connection, version st
 
 func (p *Plugin) removeHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: runtimes remove <language> <version>")
+		return fmt.Errorf("usage: runtime remove <language> <version>")
 	}
 
 	language := strings.ToLower(args[0])
