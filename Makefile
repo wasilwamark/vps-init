@@ -10,9 +10,28 @@ build:
 # Install to system (clean build + install)
 install: clean build
 	@echo "Installing vps-init to /usr/local/bin..."
-	sudo cp bin/vps-init /usr/local/bin/
-	sudo chmod +x /usr/local/bin/vps-init
+	@if sudo cp bin/vps-init /usr/local/bin/ 2>/dev/null && sudo chmod +x /usr/local/bin/vps-init; then \
+		echo "✓ Global installation successful"; \
+	else \
+		echo "✗ Global installation failed (needs sudo)"; \
+	fi
+	@echo "Installing vps-init to ~/bin..."
+	@mkdir -p ~/bin
+	@cp bin/vps-init ~/bin/ && chmod +x ~/bin/vps-init && echo "✓ Local installation successful" || echo "✗ Local installation failed"
 	@echo "Installation complete!"
+	@echo ""
+	@echo "Installed to:"
+	@if [ -f /usr/local/bin/vps-init ]; then \
+		echo "  - /usr/local/bin/vps-init (global) ✓"; \
+	else \
+		echo "  - /usr/local/bin/vps-init (global) ✗"; \
+	fi
+	@if [ -f ~/bin/vps-init ]; then \
+		echo "  - ~/bin/vps-init (local) ✓"; \
+	else \
+		echo "  - ~/bin/vps-init (local) ✗"; \
+	fi
+	@echo ""
 	@echo "You can now run: vps-init --help"
 
 # Build for multiple platforms
