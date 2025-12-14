@@ -1,13 +1,19 @@
 .PHONY: build install clean test
 
-# Build the CLI
+# Build the CLI (clean build)
 build:
+	@echo "Building vps-init..."
+	@mkdir -p bin
 	go build -o bin/vps-init ./cmd/vps-init
+	@echo "Build complete: bin/vps-init"
 
-# Install to system
-install: build
+# Install to system (clean build + install)
+install: clean build
+	@echo "Installing vps-init to /usr/local/bin..."
 	sudo cp bin/vps-init /usr/local/bin/
 	sudo chmod +x /usr/local/bin/vps-init
+	@echo "Installation complete!"
+	@echo "You can now run: vps-init --help"
 
 # Build for multiple platforms
 build-all:
