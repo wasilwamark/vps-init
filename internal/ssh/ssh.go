@@ -93,7 +93,8 @@ func (s *Connection) RunSudo(cmd, password string) *CommandResult {
 	// Use sudo with password from stdin
 	// -S: read password from stdin
 	// -p '': empty prompt
-	fullCmd := fmt.Sprintf("echo '%s' | sudo -S -p '' %s", password, cmd)
+	// Wrap command in sh -c to handle complex commands with &&, ||, etc.
+	fullCmd := fmt.Sprintf("echo '%s' | sudo -S -p '' sh -c '%s'", password, cmd)
 
 	// We mask the command in the result to avoid leaking password in logs if we had them
 	// But RunCommand doesn't mask inputs.

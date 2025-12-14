@@ -9,6 +9,7 @@ import (
 	"github.com/wasilwamark/vps-init/internal/services/mysql"
 	"github.com/wasilwamark/vps-init/internal/services/nginx"
 	"github.com/wasilwamark/vps-init/internal/services/restic"
+	"github.com/wasilwamark/vps-init/internal/services/runtimes"
 	"github.com/wasilwamark/vps-init/internal/services/system"
 	"github.com/wasilwamark/vps-init/internal/services/wireguard"
 	"github.com/wasilwamark/vps-init/internal/services/wordpress"
@@ -30,4 +31,5 @@ func initializeBuiltinPlugins() {
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/mysql", &mysql.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/wordpress", &wordpress.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/restic", &restic.Plugin{})
+	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/runtimes", &runtimes.Plugin{})
 }

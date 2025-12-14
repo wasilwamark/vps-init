@@ -53,22 +53,28 @@ VPS-Init is agentless. It simply:
 3.  **Injects** sudo passwords securely only when needed (never stored in plain text history).
 4.  **Disconnects** immediately after the task is done.
 
-## � Available Plugins
+## 📦 Available Plugins
 
 VPS-Init is built on a modular plugin architecture.
 
-### [System Management](docs/plugins/system.md)
-Update your OS packages, upgrade, and clean up.
-- **Documentation**: [See docs/plugins/system.md](docs/plugins/system.md)
-- **Commands**: `update`, `upgrade`, `full-upgrade`, `autoremove`
+### Core Plugins
+
 *   [**System Management**](docs/plugins/system.md): Update your OS packages, upgrade, and clean up.
+*   [**Alias Manager**](docs/plugins/alias.md): Manage server aliases for quick access.
+
+### Service Plugins
+
 *   [**Nginx**](docs/plugins/nginx.md): Web server and reverse proxy management.
-*   [**Docker**](docs/plugins/docker.md): Container management.
+*   [**Docker**](docs/plugins/docker.md): Container management with Docker Engine and Compose.
 *   [**Fail2Ban**](docs/plugins/fail2ban.md): Brute-force protection.
 *   [**Wireguard**](docs/plugins/wireguard.md): Personal VPN with QR code setup.
 *   [**MySQL/MariaDB**](docs/plugins/mysql.md): Database management.
 *   [**WordPress**](docs/plugins/wordpress.md): Automated LEMP stack & site deployment.
 *   [**Restic**](docs/plugins/restic.md): S3 Backups for Files and Databases.
+*   [**Language Runtimes**](internal/services/runtimes/README.md): Manage programming language runtimes (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
+
+### System Utilities
+
 *   [**Firewall**](docs/plugins/system.md): (See System/UFW) - *Note: UFW is currently under System/Firewall*
 
 ## 🛠️ Example Usage
@@ -80,6 +86,36 @@ vps-init myserver system update
 
 # Upgrade all packages
 vps-init myserver system upgrade
+```
+
+### Managing Language Runtimes
+```bash
+# Install Node.js 18 with NVM
+vps-init myserver runtimes install node 18
+
+# Install Python 3.11 with pyenv
+vps-init myserver runtimes install python 3.11
+
+# Install Go 1.21
+vps-init myserver runtimes install go 1.21
+
+# Install Java 17
+vps-init myserver runtimes install java 17
+
+# List all installed runtimes
+vps-init myserver runtimes list
+
+# Check current active versions
+vps-init myserver runtimes status
+
+# Switch Node.js versions
+vps-init myserver runtimes use node 16
+
+# Install multiple languages for a development environment
+vps-init myserver runtimes install node 18
+vps-init myserver runtimes install python 3.11
+vps-init myserver runtimes install go 1.21
+vps-init myserver runtimes install rust latest
 ```
 
 ### Managing Aliases
