@@ -87,6 +87,11 @@ func (p *Plugin) GetCommands() []plugin.Command {
 			Handler:     p.logsHandler,
 		},
 		{
+			Name:        "list-sites",
+			Description: "List all configured sites",
+			Handler:     p.listSitesHandler,
+		},
+		{
 			Name:        "add-site",
 			Description: "Add a new site (reverse proxy)",
 			Handler:     p.addSiteHandler,
@@ -169,6 +174,51 @@ func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []s
 	}
 
 	return conn.RunInteractive(cmd)
+}
+
+func (p *Plugin) listSitesHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Println("🔍 Fetching configured sites...")
+
+	// List sites in sites-enabled
+	res := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", false)
+	if !res.Success {
+		return fmt.Errorf("failed to list sites: %s", res.Stderr)
+	}
+
+	sites := strings.Split(strings.TrimSpace(res.Stdout), "\n")
+	if len(sites) == 0 || (len(sites) == 1 && sites[0] == "") {
+		fmt.Println("No sites configured.")
+		return nil
+	}
+
+	fmt.Println("\n📋 Configured Sites:")
+	for _, site := range sites {
+		if site == "" {
+			continue
+		}
+
+		// Check if it's a symlink (enabled) or regular file
+		checkRes := conn.RunCommand(fmt.Sprintf("test -L /etc/nginx/sites-enabled/%s && echo 'symlink' || echo 'file'", site), false)
+		linkType := strings.TrimSpace(checkRes.Stdout)
+
+		// Check if SSL is configured by looking for listen 443 in the config
+		sslRes := conn.RunCommand(fmt.Sprintf("grep -q 'listen.*443' /etc/nginx/sites-enabled/%s && echo 'yes' || echo 'no'", site), false)
+		hasSSL := strings.TrimSpace(sslRes.Stdout) == "yes"
+
+		status := "✅"
+		if linkType != "symlink" {
+			status = "⚠️"
+		}
+
+		sslStatus := ""
+		if hasSSL {
+			sslStatus = " 🔒 SSL"
+		}
+
+		fmt.Printf("  %s %s%s\n", status, site, sslStatus)
+	}
+
+	return nil
 }
 
 func (p *Plugin) addSiteHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
