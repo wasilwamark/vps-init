@@ -45,15 +45,20 @@ func (p *Plugin) GetCommands() []plugin.Command {
 			Description: "Remove a peer",
 			Handler:     p.removePeerHandler,
 		},
-		{
-			Name:        "list-peers",
-			Description: "List configured peers",
-			Handler:     p.listPeersHandler,
-		},
-		{
+				{
 			Name:        "status",
 			Description: "Show Wireguard status",
 			Handler:     p.statusHandler,
+		},
+		{
+			Name:        "list-peers",
+			Description: "List all configured WireGuard peers",
+			Handler:     p.listPeersHandler,
+		},
+		{
+			Name:        "restart",
+			Description: "Restart Wireguard service",
+			Handler:     p.restartHandler,
 		},
 	}
 }
@@ -190,18 +195,17 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	}
 	sPub := strings.TrimSpace(sPubRes.Stdout)
 
-	// Find available IP
-	// For simplicity, we just count peers + 2 (since .1 is server)
-	// A real implementation would parse the file properly.
-	// MVP: Check file for AllowedIPs, find max.
-	// Hack: Just randomly pick or increment?
-	// Let's grab the last IP octet from the config file if possible, or just fail if exists.
-	// Simple strategy: 10.100.0.X
-	res = conn.RunSudo("grep AllowedIPs /etc/wireguard/wg0.conf | wc -l", pass)
-	countStr := strings.TrimSpace(res.Stdout)
-	var count int
-	fmt.Sscanf(countStr, "%d", &count)
-	ipSuffix := count + 2 // Start at .2
+	// Find available IP by checking existing peers
+	res = conn.RunSudo("grep AllowedIPs /etc/wireguard/wg0.conf | grep -oE '10\\.100\\.0\\.[0-9]+' | sort -V | tail -1", pass)
+	lastIP := strings.TrimSpace(res.Stdout)
+	var ipSuffix int
+	if lastIP != "" {
+		// Extract the last octet and increment
+		fmt.Sscanf(lastIP, "10.100.0.%d", &ipSuffix)
+		ipSuffix++ // Use next available IP
+	} else {
+		ipSuffix = 2 // Start at .2 if no peers exist
+	}
 	clientIP := fmt.Sprintf("10.100.0.%d/32", ipSuffix)
 
 	// Get Server Endpoint (Public IP)
@@ -219,12 +223,13 @@ AllowedIPs = %s
 	// Append to server config
 	tmpPeer := "/tmp/wg_peer_add"
 	conn.WriteFile(peerBlock, tmpPeer)
-	if res := conn.RunSudo(fmt.Sprintf("bash -c 'cat %s >> /etc/wireguard/wg0.conf'", tmpPeer), pass); !res.Success {
+	// Use tee with sudo to append to the config file
+	if res := conn.RunSudo(fmt.Sprintf("cat %s | sudo tee -a /etc/wireguard/wg0.conf", tmpPeer), pass); !res.Success {
 		return fmt.Errorf("failed to update server config: %s", res.Stderr)
 	}
 
-	// Reload Server
-	conn.RunSudo("bash -c 'wg syncconf wg0 <(wg-quick strip wg0)'", pass)
+	// Reload Server (restart to preserve comments)
+	conn.RunSudo("systemctl restart wg-quick@wg0", pass)
 
 	// create Client Config
 	// Remove /32 suffix from clientIP for Address field - just use the IP
@@ -468,30 +473,48 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, ar
 	return nil
 }
 
+
+func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Println("🔌 Wireguard Service Status:")
+	conn.RunInteractive("systemctl status wg-quick@wg0")
+	fmt.Println("\n📊 Interface Status:")
+	return conn.RunInteractive("sudo wg show")
+}
+
 func (p *Plugin) listPeersHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
-	// Get the current WireGuard status
-	res := conn.RunSudo("wg show", pass)
-	if !res.Success {
-		return fmt.Errorf("failed to get wg status: %s", res.Stderr)
-	}
+	fmt.Println("🔌 WireGuard Peers Overview")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
-	// Parse the config file to get peer names
+	// Get configuration peers
 	configRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
 	if !configRes.Success {
 		return fmt.Errorf("failed to read config file: %s", configRes.Stderr)
 	}
 
-	// Build a map of public keys to device names
-	peerNames := make(map[string]string)
+	// Parse peers from config
 	lines := strings.Split(configRes.Stdout, "\n")
-	var currentName string
+	var configPeers []struct {
+		name    string
+		pubKey  string
+		allowed string
+	}
+
+	var currentName, currentPubKey, currentAllowed string
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "[Peer]") {
-			currentName = ""
+			// Save previous peer if exists
+			if currentPubKey != "" {
+				configPeers = append(configPeers, struct {
+					name    string
+					pubKey  string
+					allowed string
+				}{currentName, currentPubKey, currentAllowed})
+			}
+			currentName, currentPubKey, currentAllowed = "", "", ""
 			continue
 		}
 		if strings.HasPrefix(line, "# Name =") {
@@ -502,45 +525,171 @@ func (p *Plugin) listPeersHandler(ctx context.Context, conn *ssh.Connection, arg
 		}
 		if strings.HasPrefix(line, "PublicKey =") {
 			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 && currentName != "" {
-				pubKey := strings.TrimSpace(parts[1])
-				peerNames[pubKey] = currentName
-				currentName = ""
+			if len(parts) == 2 {
+				currentPubKey = strings.TrimSpace(parts[1])
+			}
+		}
+		if strings.HasPrefix(line, "AllowedIPs =") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				currentAllowed = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	// Save last peer if exists
+	if currentPubKey != "" {
+		configPeers = append(configPeers, struct {
+			name    string
+			pubKey  string
+			allowed string
+		}{currentName, currentPubKey, currentAllowed})
+	}
+
+	// Get active peers from wg show
+	activeRes := conn.RunSudo("wg show wg0", pass)
+	var activePeers map[string]struct {
+		endpoint    string
+		allowedIps  string
+		latestHandshake string
+		transferRx  string
+		transferTx  string
+	}
+	activePeers = make(map[string]struct {
+		endpoint    string
+		allowedIps  string
+		latestHandshake string
+		transferRx  string
+		transferTx  string
+	})
+
+	if activeRes.Success {
+		// Parse wg show output
+		activeLines := strings.Split(activeRes.Stdout, "\n")
+		var currentPeer string
+
+		for _, line := range activeLines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "peer:") {
+				parts := strings.Fields(trimmed)
+				if len(parts) >= 2 {
+					currentPeer = parts[1]
+					activePeers[currentPeer] = struct {
+						endpoint    string
+						allowedIps  string
+						latestHandshake string
+						transferRx  string
+						transferTx  string
+					}{}
+				}
+			} else if currentPeer != "" {
+				if strings.Contains(trimmed, "endpoint:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					if len(parts) == 2 {
+						peer := activePeers[currentPeer]
+						peer.endpoint = strings.TrimSpace(parts[1])
+						activePeers[currentPeer] = peer
+					}
+				} else if strings.Contains(trimmed, "allowed ips:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					if len(parts) == 2 {
+						peer := activePeers[currentPeer]
+						peer.allowedIps = strings.TrimSpace(parts[1])
+						activePeers[currentPeer] = peer
+					}
+				} else if strings.Contains(trimmed, "latest handshake:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					if len(parts) == 2 {
+						peer := activePeers[currentPeer]
+						peer.latestHandshake = strings.TrimSpace(parts[1])
+						activePeers[currentPeer] = peer
+					}
+				} else if strings.Contains(trimmed, "transfer:") {
+					parts := strings.SplitN(trimmed, ":", 2)
+					if len(parts) == 2 {
+						transfer := strings.TrimSpace(parts[1])
+						if rxTx := strings.Split(transfer, ","); len(rxTx) == 2 {
+							peer := activePeers[currentPeer]
+							peer.transferRx = strings.TrimSpace(rxTx[0])
+							peer.transferTx = strings.TrimSpace(rxTx[1])
+							activePeers[currentPeer] = peer
+						}
+					}
+				}
 			}
 		}
 	}
 
-	// Parse the wg show output and replace public keys with names
-	output := res.Stdout
-	lines = strings.Split(output, "\n")
+	// Display peers
+	if len(configPeers) == 0 {
+		fmt.Println("❌ No peers configured")
+		return nil
+	}
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "peer:") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				pubKey := parts[1]
-				if name, exists := peerNames[pubKey]; exists {
-					fmt.Printf("peer: %s (%s)\n", pubKey, name)
-				} else {
-					fmt.Println(line)
-				}
-			} else {
-				fmt.Println(line)
+	fmt.Printf("📊 Total Configured Peers: %d\n\n", len(configPeers))
+
+	for i, peer := range configPeers {
+		displayName := peer.name
+		if displayName == "" {
+			displayName = "Unnamed Peer"
+		}
+
+		// Check if peer is active
+		activeInfo, isActive := activePeers[peer.pubKey]
+
+		// Extract IP from AllowedIPs for display
+		ipAddr := strings.Replace(peer.allowed, "/32", "", 1)
+
+		fmt.Printf("┌─ Peer %d", i+1)
+		if displayName != "Unnamed Peer" {
+			fmt.Printf(" (%s)", displayName)
+		}
+		fmt.Printf("\n")
+		fmt.Printf("│  🌐 IP Address: %s\n", ipAddr)
+		fmt.Printf("│  🔑 Public Key: %s\n", peer.pubKey)
+
+		if isActive {
+			fmt.Printf("│  ✅ Status: Connected")
+			if activeInfo.endpoint != "" {
+				fmt.Printf(" from %s", activeInfo.endpoint)
+			}
+			fmt.Printf("\n")
+			if activeInfo.latestHandshake != "" && activeInfo.latestHandshake != "(none)" {
+				fmt.Printf("│  🤝 Latest Handshake: %s\n", activeInfo.latestHandshake)
+			}
+			if activeInfo.transferRx != "" && activeInfo.transferTx != "" {
+				fmt.Printf("│  📊 Transfer: %s, %s\n", activeInfo.transferRx, activeInfo.transferTx)
 			}
 		} else {
-			fmt.Println(line)
+			fmt.Printf("│  ❌ Status: Disconnected\n")
+		}
+
+		if i < len(configPeers)-1 {
+			fmt.Printf("├─────────────────────────────────────────────────────────────\n")
+		} else {
+			fmt.Printf("└─────────────────────────────────────────────────────────────\n")
 		}
 	}
+
+	// Summary
+	activeCount := len(activePeers)
+	inactiveCount := len(configPeers) - activeCount
+	fmt.Printf("\n📈 Summary: %d Active, %d Inactive\n", activeCount, inactiveCount)
 
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	fmt.Println("🔌 Wireguard Service Status:")
-	conn.RunInteractive("systemctl status wg-quick@wg0")
-	fmt.Println("\n📊 Interface Status:")
-	return conn.RunInteractive("sudo wg show")
+func (p *Plugin) restartHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Println("🔄 Restarting Wireguard service...")
+	pass := getSudoPass(flags)
+
+	// Restart the service
+	res := conn.RunSudo("systemctl restart wg-quick@wg0", pass)
+	if !res.Success {
+		return fmt.Errorf("failed to restart Wireguard service: %s", res.Stderr)
+	}
+
+	fmt.Println("✅ Wireguard service restarted successfully")
+	return nil
 }
 
 // Helpers
