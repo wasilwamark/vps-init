@@ -16,8 +16,55 @@ func (p *Plugin) Name() string                                   { return "wordp
 func (p *Plugin) Description() string                            { return "WordPress Manager (LEMP Stack)" }
 func (p *Plugin) Author() string                                 { return "VPS-Init" }
 func (p *Plugin) Version() string                                { return "0.0.1" }
-func (p *Plugin) Dependencies() []string                         { return []string{"mysql", "nginx"} }
 func (p *Plugin) Initialize(config map[string]interface{}) error { return nil }
+
+// Enhanced plugin interface methods
+func (p *Plugin) Validate() error {
+	// WordPress plugin validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{
+		{
+			Name:     "mysql",
+			Version:  ">=0.0.1",
+			Optional: false,
+		},
+		{
+			Name:     "nginx",
+			Version:  ">=0.0.1",
+			Optional: false,
+		},
+	}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64"},
+		Tags:              []string{"cms", "wordpress", "php", "web"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        "wordpress",
+		Description: "WordPress Manager (LEMP Stack)",
+		Version:     "0.0.1",
+		Author:      "VPS-Init",
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-init-plugins/wordpress",
+		Tags:        []string{"cms", "wordpress", "php", "web"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
+}
+
 func (p *Plugin) Start(ctx context.Context) error                { return nil }
 func (p *Plugin) Stop(ctx context.Context) error                 { return nil }
 func (p *Plugin) GetRootCommand() *cobra.Command                 { return nil }

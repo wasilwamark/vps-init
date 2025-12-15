@@ -15,8 +15,44 @@ func (p *Plugin) Name() string                                   { return "mysql
 func (p *Plugin) Description() string                            { return "Manage MySQL/MariaDB Database Server" }
 func (p *Plugin) Author() string                                 { return "VPS-Init" }
 func (p *Plugin) Version() string                                { return "0.0.1" }
-func (p *Plugin) Dependencies() []string                         { return []string{} }
 func (p *Plugin) Initialize(config map[string]interface{}) error { return nil }
+
+// Enhanced plugin interface methods
+func (p *Plugin) Validate() error {
+	// MySQL plugin validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64"},
+		Tags:              []string{"database", "mysql", "mariadb"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        "mysql",
+		Description: "Manage MySQL/MariaDB Database Server",
+		Version:     "0.0.1",
+		Author:      "VPS-Init",
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-init-plugins/mysql",
+		Tags:        []string{"database", "mysql", "mariadb"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
+}
+
 func (p *Plugin) Start(ctx context.Context) error                { return nil }
 func (p *Plugin) Stop(ctx context.Context) error                 { return nil }
 func (p *Plugin) GetRootCommand() *cobra.Command                 { return nil }
