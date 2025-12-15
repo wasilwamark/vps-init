@@ -1,0 +1,497 @@
+package firewall
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init/pkg/plugin"
+)
+
+type Plugin struct{}
+
+func (p *Plugin) Name() string {
+	return "firewall"
+}
+
+func (p *Plugin) Description() string {
+	return "Firewall management using UFW (Uncomplicated Firewall)"
+}
+
+func (p *Plugin) Version() string {
+	return "1.0.0"
+}
+
+func (p *Plugin) Author() string {
+	return "VPS-Init Team"
+}
+
+func (p *Plugin) Initialize(config map[string]interface{}) error {
+	return nil
+}
+
+// Enhanced plugin interface methods
+func (p *Plugin) Validate() error {
+	// Firewall plugin validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{
+		{
+			Name:     "system",
+			Version:  ">=1.0.0",
+			Optional: false,
+		},
+	}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64"},
+		Tags:              []string{"security", "networking", "firewall", "ufw"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        "firewall",
+		Description: "Firewall management using UFW (Uncomplicated Firewall)",
+		Version:     "1.0.0",
+		Author:      "VPS-Init Team",
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-init-plugins/firewall",
+		Tags:        []string{"security", "networking", "firewall", "ufw"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
+}
+
+func (p *Plugin) GetCommands() []plugin.Command {
+	return []plugin.Command{
+		{
+			Name:        "install",
+			Description: "Install and configure UFW firewall",
+			Flags: []plugin.Flag{
+				{
+					Name:        "default-policy",
+					Shorthand:   "p",
+					Description: "Default firewall policy (allow/deny)",
+					Default:     "deny",
+					Type:        plugin.ArgumentTypeString,
+				},
+				{
+					Name:        "enable-logging",
+					Shorthand:   "l",
+					Description: "Enable firewall logging",
+					Default:     true,
+					Type:        plugin.ArgumentTypeBool,
+				},
+				{
+					Name:        "allow-ssh",
+					Description: "Automatically allow SSH connections",
+					Default:     true,
+					Type:        plugin.ArgumentTypeBool,
+				},
+			},
+			Handler: p.installHandler,
+		},
+		{
+			Name:        "allow",
+			Description: "Allow traffic through firewall",
+			Args: []plugin.Argument{
+				{
+					Name:        "port",
+					Description: "Port number or service name",
+					Required:    true,
+					Type:        plugin.ArgumentTypeString,
+				},
+				{
+					Name:        "protocol",
+					Description: "Protocol (tcp/udp)",
+					Required:    false,
+					Type:        plugin.ArgumentTypeString,
+				},
+				{
+					Name:        "from",
+					Description: "Source IP address (optional)",
+					Required:    false,
+					Type:        plugin.ArgumentTypeString,
+				},
+			},
+			Handler: p.allowHandler,
+		},
+		{
+			Name:        "deny",
+			Description: "Deny traffic through firewall",
+			Args: []plugin.Argument{
+				{
+					Name:        "port",
+					Description: "Port number or service name",
+					Required:    true,
+					Type:        plugin.ArgumentTypeString,
+				},
+				{
+					Name:        "protocol",
+					Description: "Protocol (tcp/udp)",
+					Required:    false,
+					Type:        plugin.ArgumentTypeString,
+				},
+				{
+					Name:        "from",
+					Description: "Source IP address (optional)",
+					Required:    false,
+					Type:        plugin.ArgumentTypeString,
+				},
+			},
+			Handler: p.denyHandler,
+		},
+		{
+			Name:        "status",
+			Description: "Show firewall status and rules",
+			Handler:     p.statusHandler,
+		},
+		{
+			Name:        "enable",
+			Description: "Enable firewall",
+			Handler:     p.enableHandler,
+		},
+		{
+			Name:        "disable",
+			Description: "Disable firewall",
+			Handler:     p.disableHandler,
+		},
+		{
+			Name:        "reset",
+			Description: "Reset firewall to default settings",
+			Handler:     p.resetHandler,
+		},
+		{
+			Name:        "delete",
+			Description: "Delete firewall rule",
+			Args: []plugin.Argument{
+				{
+					Name:        "rule",
+					Description: "Rule number to delete",
+					Required:    true,
+					Type:        plugin.ArgumentTypeInt,
+				},
+			},
+			Handler: p.deleteHandler,
+		},
+		{
+			Name:        "logging",
+			Description: "Configure firewall logging",
+			Args: []plugin.Argument{
+				{
+					Name:        "action",
+					Description: "Logging action (on/off/low/medium/high/full)",
+					Required:    true,
+					Type:        plugin.ArgumentTypeString,
+				},
+			},
+			Handler: p.loggingHandler,
+		},
+	}
+}
+
+func (p *Plugin) GetRootCommand() *cobra.Command {
+	return nil
+}
+
+func (p *Plugin) Start(ctx context.Context) error {
+	return nil
+}
+
+func (p *Plugin) Stop(ctx context.Context) error {
+	return nil
+}
+
+// Command handlers
+func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	fmt.Println("🔥 Installing UFW firewall...")
+
+	// Check if UFW is already installed
+	if res := conn.RunCommand("ufw --version", false); res.Success {
+		fmt.Println("✅ UFW is already installed")
+		return nil
+	}
+
+	// Update package list
+	fmt.Println("Updating package list...")
+	if err := conn.RunSudo("apt update", sudoPass); err != nil {
+		return fmt.Errorf("failed to update package list: %w", err)
+	}
+
+	// Install UFW
+	fmt.Println("Installing UFW...")
+	if err := conn.RunSudo("apt install -y ufw", sudoPass); err != nil {
+		return fmt.Errorf("failed to install UFW: %w", err)
+	}
+
+	// Set default policy
+	defaultPolicy := "deny"
+	if dp, ok := flags["default-policy"].(string); ok && dp != "" {
+		defaultPolicy = dp
+	}
+
+	fmt.Printf("Setting default policy to %s...\n", defaultPolicy)
+	if err := conn.RunSudo(fmt.Sprintf("ufw default %s", defaultPolicy), sudoPass); err != nil {
+		return fmt.Errorf("failed to set default policy: %w", err)
+	}
+
+	// Enable logging if requested
+	enableLogging := true
+	if el, ok := flags["enable-logging"].(bool); ok {
+		enableLogging = el
+	}
+
+	if enableLogging {
+		fmt.Println("Enabling firewall logging...")
+		if err := conn.RunSudo("ufw logging on", sudoPass); err != nil {
+			return fmt.Errorf("failed to enable logging: %w", err)
+		}
+	}
+
+	// Allow SSH by default to prevent lockout
+	allowSSH := true
+	if as, ok := flags["allow-ssh"].(bool); ok {
+		allowSSH = as
+	}
+
+	if allowSSH {
+		fmt.Println("Allowing SSH connections...")
+		if err := conn.RunSudo("ufw allow ssh", sudoPass); err != nil {
+			return fmt.Errorf("failed to allow SSH: %w", err)
+		}
+	}
+
+	fmt.Println("✅ UFW firewall installed and configured")
+	fmt.Println("📝 Note: Run 'vps-init firewall enable' to activate the firewall")
+	fmt.Println("⚠️  WARNING: Make sure SSH is allowed before enabling the firewall!")
+
+	return nil
+}
+
+func (p *Plugin) allowHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	if len(args) < 1 {
+		return fmt.Errorf("port or service is required")
+	}
+
+	port := args[0]
+	protocol := ""
+	from := ""
+
+	// Parse arguments
+	if len(args) > 1 {
+		protocol = args[1]
+	}
+	if len(args) > 2 {
+		from = args[2]
+	}
+
+	var cmd string
+	if protocol != "" && from != "" {
+		cmd = fmt.Sprintf("ufw allow from %s to any port %s proto %s", from, port, protocol)
+	} else if protocol != "" {
+		cmd = fmt.Sprintf("ufw allow %s/%s", port, protocol)
+	} else if from != "" {
+		cmd = fmt.Sprintf("ufw allow from %s to any port %s", from, port)
+	} else {
+		cmd = fmt.Sprintf("ufw allow %s", port)
+	}
+
+	fmt.Printf("Allowing traffic: %s\n", cmd)
+	if err := conn.RunSudo(cmd, sudoPass); err != nil {
+		return fmt.Errorf("failed to allow traffic: %w", err)
+	}
+
+	fmt.Printf("✅ Allowed traffic on %s\n", port)
+	return nil
+}
+
+func (p *Plugin) denyHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	if len(args) < 1 {
+		return fmt.Errorf("port or service is required")
+	}
+
+	port := args[0]
+	protocol := ""
+	from := ""
+
+	// Parse arguments
+	if len(args) > 1 {
+		protocol = args[1]
+	}
+	if len(args) > 2 {
+		from = args[2]
+	}
+
+	var cmd string
+	if protocol != "" && from != "" {
+		cmd = fmt.Sprintf("ufw deny from %s to any port %s proto %s", from, port, protocol)
+	} else if protocol != "" {
+		cmd = fmt.Sprintf("ufw deny %s/%s", port, protocol)
+	} else if from != "" {
+		cmd = fmt.Sprintf("ufw deny from %s to any port %s", from, port)
+	} else {
+		cmd = fmt.Sprintf("ufw deny %s", port)
+	}
+
+	fmt.Printf("Denying traffic: %s\n", cmd)
+	if err := conn.RunSudo(cmd, sudoPass); err != nil {
+		return fmt.Errorf("failed to deny traffic: %w", err)
+	}
+
+	fmt.Printf("✅ Denied traffic on %s\n", port)
+	return nil
+}
+
+func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Println("🔥 Firewall Status:")
+	fmt.Println("=================")
+
+	// Check if UFW is installed
+	if res := conn.RunCommand("which ufw", false); !res.Success {
+		fmt.Println("❌ UFW is not installed")
+		fmt.Println("   Run 'vps-init firewall install' to install UFW")
+		return nil
+	}
+
+	// Get detailed status
+	if res := conn.RunCommand("ufw status verbose", false); res.Success {
+		fmt.Println(res.Stdout)
+	} else {
+		fmt.Println("❌ Failed to get firewall status")
+	}
+
+	// Show numbered rules for easier deletion
+	if res := conn.RunCommand("ufw status numbered", false); res.Success {
+		fmt.Println("\n📋 Numbered Rules:")
+		fmt.Println(strings.Repeat("=", 20))
+		fmt.Println(res.Stdout)
+	}
+
+	return nil
+}
+
+func (p *Plugin) enableHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	fmt.Println("🔥 Enabling firewall...")
+	fmt.Println("⚠️  WARNING: This will activate the firewall!")
+
+	// Check SSH rule before enabling to prevent lockout
+	if res := conn.RunCommand("ufw status | grep '22/tcp'", false); !res.Success {
+		fmt.Println("❌ SSH rule not found! Adding SSH rule to prevent lockout...")
+		if err := conn.RunSudo("ufw allow ssh", sudoPass); err != nil {
+			return fmt.Errorf("failed to add SSH rule: %w", err)
+		}
+		fmt.Println("✅ SSH rule added")
+	}
+
+	if err := conn.RunSudo("ufw --force enable", sudoPass); err != nil {
+		return fmt.Errorf("failed to enable firewall: %w", err)
+	}
+
+	fmt.Println("✅ Firewall enabled successfully")
+	return nil
+}
+
+func (p *Plugin) disableHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	fmt.Println("🔥 Disabling firewall...")
+
+	if err := conn.RunSudo("ufw disable", sudoPass); err != nil {
+		return fmt.Errorf("failed to disable firewall: %w", err)
+	}
+
+	fmt.Println("✅ Firewall disabled")
+	return nil
+}
+
+func (p *Plugin) resetHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	fmt.Println("🔥 Resetting firewall to default settings...")
+	fmt.Println("⚠️  WARNING: This will remove all firewall rules!")
+
+	if err := conn.RunSudo("ufw --force reset", sudoPass); err != nil {
+		return fmt.Errorf("failed to reset firewall: %w", err)
+	}
+
+	fmt.Println("✅ Firewall reset successfully")
+	fmt.Println("📝 Note: You'll need to reconfigure the firewall and enable it again")
+	return nil
+}
+
+func (p *Plugin) deleteHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	if len(args) < 1 {
+		return fmt.Errorf("rule number is required")
+	}
+
+	ruleNum := args[0]
+
+	fmt.Printf("🔥 Deleting firewall rule %s...\n", ruleNum)
+	if err := conn.RunSudo(fmt.Sprintf("ufw delete %s", ruleNum), sudoPass); err != nil {
+		return fmt.Errorf("failed to delete rule: %w", err)
+	}
+
+	fmt.Printf("✅ Deleted firewall rule %s\n", ruleNum)
+	return nil
+}
+
+func (p *Plugin) loggingHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	sudoPass := getSudoPass(flags)
+
+	if len(args) < 1 {
+		return fmt.Errorf("logging action is required (on/off/low/medium/high/full)")
+	}
+
+	action := args[0]
+	validActions := []string{"on", "off", "low", "medium", "high", "full"}
+
+	isValid := false
+	for _, valid := range validActions {
+		if action == valid {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		return fmt.Errorf("invalid logging action. Use: %s", strings.Join(validActions, ", "))
+	}
+
+	fmt.Printf("🔥 Setting firewall logging to %s...\n", action)
+	if err := conn.RunSudo(fmt.Sprintf("ufw logging %s", action), sudoPass); err != nil {
+		return fmt.Errorf("failed to set logging: %w", err)
+	}
+
+	fmt.Printf("✅ Firewall logging set to %s\n", action)
+	return nil
+}
+
+// Helper function to get sudo password from flags
+func getSudoPass(flags map[string]interface{}) string {
+	if pass, ok := flags["sudo_password"].(string); ok {
+		return pass
+	}
+	return ""
+}
