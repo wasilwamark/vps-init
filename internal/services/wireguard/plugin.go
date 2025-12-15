@@ -212,41 +212,87 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	// Try to guess or use host
 	endpoint := fmt.Sprintf("%s:51820", conn.Host)
 
+	// First, backup existing names from current config
+	var existingNames []struct {
+		pubKey string
+		name   string
+	}
+
+	configRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if configRes.Success {
+		lines := strings.Split(configRes.Stdout, "\n")
+		var currentName string
+
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "# Name =") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 {
+					currentName = strings.TrimSpace(parts[1])
+				}
+			} else if strings.HasPrefix(trimmed, "PublicKey =") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 && currentName != "" {
+					existingNames = append(existingNames, struct {
+						pubKey string
+						name   string
+					}{strings.TrimSpace(parts[1]), currentName})
+					currentName = ""
+				}
+			}
+		}
+	}
+
 	// Add peer to runtime first
 	if res := conn.RunSudo(fmt.Sprintf("wg set wg0 peer %s allowed-ips %s", cPub, clientIP), pass); !res.Success {
 		return fmt.Errorf("failed to add peer to runtime: %s", res.Stderr)
 	}
 
-	// Add name comment to config file by creating a temporary config with comments
-	// First, get the current config with runtime changes
+	// Save runtime config (this will strip comments)
 	saveRes := conn.RunSudo("wg-quick save wg0", pass)
 	if !saveRes.Success {
 		return fmt.Errorf("failed to save runtime config: %s", saveRes.Stderr)
 	}
 
-	// Now add the name comment by reading the config and adding it before the last peer
-	configRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
-	if configRes.Success {
-		lines := strings.Split(configRes.Stdout, "\n")
+	// Read the saved config and restore all name comments including the new one
+	updatedConfigRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if updatedConfigRes.Success {
+		lines := strings.Split(updatedConfigRes.Stdout, "\n")
 		var newConfig []string
 
-		// Find the peer with our public key and add the name comment before it
+		// Add our new peer to the existing names
+		existingNames = append(existingNames, struct {
+			pubKey string
+			name   string
+		}{cPub, name})
+
 		for _, line := range lines {
-			if strings.Contains(line, cPub) {
-				// Add the name comment before this line
-				newConfig = append(newConfig, fmt.Sprintf("# Name = %s", name))
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "PublicKey =") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 {
+					pubKey := strings.TrimSpace(parts[1])
+					// Look for this public key in our names list
+					for _, nameInfo := range existingNames {
+						if nameInfo.pubKey == pubKey {
+							// Add the name comment before this peer
+							newConfig = append(newConfig, fmt.Sprintf("# Name = %s", nameInfo.name))
+							break
+						}
+					}
+				}
 			}
 			newConfig = append(newConfig, line)
 		}
 
-		// Write the updated config
+		// Write the updated config with all names preserved
 		newConfigStr := strings.Join(newConfig, "\n")
-		tmpConfig := "/tmp/wg0_with_name.conf"
+		tmpConfig := "/tmp/wg0_with_all_names.conf"
 		conn.WriteFile(newConfigStr, tmpConfig)
 
 		// Replace the config file
 		if res := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpConfig), pass); !res.Success {
-			return fmt.Errorf("failed to update config with name: %s", res.Stderr)
+			return fmt.Errorf("failed to update config with names: %s", res.Stderr)
 		}
 		conn.RunSudo("chmod 600 /etc/wireguard/wg0.conf", pass)
 	}
