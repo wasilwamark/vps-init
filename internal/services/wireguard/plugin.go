@@ -212,24 +212,44 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	// Try to guess or use host
 	endpoint := fmt.Sprintf("%s:51820", conn.Host)
 
-	// Add Peer to Server Config
-	peerBlock := fmt.Sprintf(`
-[Peer]
-# Name = %s
-PublicKey = %s
-AllowedIPs = %s
-`, name, cPub, clientIP)
-
-	// Append to server config
-	tmpPeer := "/tmp/wg_peer_add"
-	conn.WriteFile(peerBlock, tmpPeer)
-	// Use tee with sudo to append to the config file
-	if res := conn.RunSudo(fmt.Sprintf("cat %s | sudo tee -a /etc/wireguard/wg0.conf", tmpPeer), pass); !res.Success {
-		return fmt.Errorf("failed to update server config: %s", res.Stderr)
+	// Add peer to runtime first
+	if res := conn.RunSudo(fmt.Sprintf("wg set wg0 peer %s allowed-ips %s", cPub, clientIP), pass); !res.Success {
+		return fmt.Errorf("failed to add peer to runtime: %s", res.Stderr)
 	}
 
-	// Reload Server (restart to preserve comments)
-	conn.RunSudo("systemctl restart wg-quick@wg0", pass)
+	// Add name comment to config file by creating a temporary config with comments
+	// First, get the current config with runtime changes
+	saveRes := conn.RunSudo("wg-quick save wg0", pass)
+	if !saveRes.Success {
+		return fmt.Errorf("failed to save runtime config: %s", saveRes.Stderr)
+	}
+
+	// Now add the name comment by reading the config and adding it before the last peer
+	configRes := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if configRes.Success {
+		lines := strings.Split(configRes.Stdout, "\n")
+		var newConfig []string
+
+		// Find the peer with our public key and add the name comment before it
+		for _, line := range lines {
+			if strings.Contains(line, cPub) {
+				// Add the name comment before this line
+				newConfig = append(newConfig, fmt.Sprintf("# Name = %s", name))
+			}
+			newConfig = append(newConfig, line)
+		}
+
+		// Write the updated config
+		newConfigStr := strings.Join(newConfig, "\n")
+		tmpConfig := "/tmp/wg0_with_name.conf"
+		conn.WriteFile(newConfigStr, tmpConfig)
+
+		// Replace the config file
+		if res := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpConfig), pass); !res.Success {
+			return fmt.Errorf("failed to update config with name: %s", res.Stderr)
+		}
+		conn.RunSudo("chmod 600 /etc/wireguard/wg0.conf", pass)
+	}
 
 	// create Client Config
 	// Remove /32 suffix from clientIP for Address field - just use the IP
