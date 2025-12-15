@@ -67,15 +67,43 @@ VPS-Init is built on a modular plugin architecture.
 *   [**Nginx**](docs/plugins/nginx.md): Web server and reverse proxy management.
 *   [**Docker**](docs/plugins/docker.md): Container management with Docker Engine and Compose.
 *   [**Fail2Ban**](docs/plugins/fail2ban.md): Brute-force protection.
+*   [**Firewall**](docs/plugins/firewall-plugin.md): UFW firewall management with comprehensive rule management.
 *   [**Wireguard**](docs/plugins/wireguard.md): Personal VPN with QR code setup.
-*   [**MySQL/MariaDB**](docs/plugins/mysql.md): Database management.
+*   [**MySQL/MariaDB**](docs/plugins/mysql.md): Database management with user and database operations.
 *   [**WordPress**](docs/plugins/wordpress.md): Automated LEMP stack & site deployment.
-*   [**Restic**](docs/plugins/restic.md): S3 Backups for Files and Databases.
-*   [**Language Runtime**](internal/services/runtimes/README.md): Manage programming language runtime (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
+*   [**Redis**](docs/plugins/redis.md): Redis database server management with backup capabilities.
+*   [**Restic**](docs/plugins/restic.md): S3 backup manager with database support.
+*   [**Language Runtime**](internal/services/runtimes/README.md): Multiple language runtime management (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
 
 ### System Utilities
 
-*   [**Firewall**](docs/plugins/system.md): (See System/UFW) - *Note: UFW is currently under System/Firewall*
+*   [**System Management**](docs/plugins/system.md): Update OS packages, manage services, system upgrades.
+
+### Plugin Features
+
+#### **Database & Storage**
+- **MySQL/MariaDB**: Complete database server with user management
+- **Redis**: High-performance in-memory data store with persistence
+- **Restic**: S3-compatible backup system
+
+#### **Security & Networking**
+- **Firewall**: UFW-based firewall with rule management
+- **Fail2Ban**: Intrusion prevention and brute-force protection
+- **Wireguard**: VPN server with QR code setup
+
+#### **Web & Applications**
+- **WordPress**: Automated LEMP stack installation and site management
+- **Nginx**: Web server configuration and SSL management
+
+#### **Containerization**
+- **Docker**: Container management with Compose support
+
+#### **Development Tools**
+- **Language Runtime**: Multi-language runtime management
+
+#### **Server Management**
+- **System**: OS package management and system administration
+- **Alias**: Server connection management
 
 ## 🛠️ Example Usage
 
@@ -86,6 +114,92 @@ vps-init myserver system update
 
 # Upgrade all packages
 vps-init myserver system upgrade
+```
+
+### Database & Storage Management
+```bash
+# Install and secure MySQL
+vps-init myserver mysql install
+
+# Create a database
+vps-init myserver mysql create-db myapp
+
+# Create a database user
+vps-init myserver mysql create-user app_user 'strong_password'
+
+# Grant privileges
+vps-init myserver mysql grant app_user myapp ALL PRIVILEGES
+
+# Install Redis with backup support
+vps-init myserver redis install
+
+# Create Redis backup
+vps-init myserver redis backup
+
+# Restic backup management
+vps-init myserver restic init s3:mybucket
+vps-init myserver restic backup-db mydatabase
+```
+
+### Web Server Management
+```bash
+# Install Nginx with SSL
+vps-init myserver nginx install
+vps-init myserver nginx install-ssl mydomain.com
+
+# Install WordPress with LEMP stack
+vps-init myserver wordpress install
+vps-init myserver wordpress create-site mydomain.com
+
+# Install Redis cache for WordPress
+vps-init myserver redis install
+vps-init myserver firewall allow 6379
+```
+
+### Security & Hardening
+```bash
+# Install and configure firewall
+vps-init myserver firewall install
+vps-init myserver firewall enable
+
+# Install fail2ban for brute-force protection
+vps-init myserver fail2ban install
+
+# Set up personal VPN
+vps-init myserver wireguard install
+vps-init myserver wireguard add-client my-device
+
+# Check firewall status
+vps-init myserver firewall status
+
+# Review fail2ban status
+vps-init myserver fail2ban status
+```
+
+### Development Environment
+```bash
+# Install multiple runtimes for development
+vps-init myserver runtime install node 18
+vps-init myserver runtime install python 3.11
+vps-init myserver runtime install go 1.21
+vps-init myserver runtime install java 17
+vps-init myserver runtime install rust latest
+
+# Switch between versions
+vps-init myserver runtime use node 16
+vps-init myserver runtime use python 3.9
+```
+
+### Container Management
+```bash
+# Install Docker and Docker Compose
+vps-init myserver docker install
+
+# Deploy a multi-container application
+vps-init myserver docker deploy ./docker-compose.yml
+
+# Install Portainer for web UI management
+vps-init myserver docker install-portainer
 ```
 
 ### Managing Language Runtime
@@ -116,6 +230,37 @@ vps-init myserver runtime install node 18
 vps-init myserver runtime install python 3.11
 vps-init myserver runtime install go 1.21
 vps-init myserver runtime install rust latest
+```
+
+### Firewall Management
+```bash
+# Install and configure UFW firewall with secure defaults
+vps-init myserver firewall install
+
+# Allow web traffic
+vps-init myserver firewall allow 80
+vps-init myserver firewall allow 443
+
+# Allow SSH from specific IP
+vps-init myserver firewall allow 22 tcp 192.168.1.100
+
+# Enable firewall
+vps-init myserver firewall enable
+
+# Check firewall status
+vps-init myserver firewall status
+
+# Deny specific port
+vps-init myserver firewall deny 23
+
+# Delete rule by number
+vps-init myserver firewall delete 3
+
+# Reset firewall to defaults
+vps-init myserver firewall reset
+
+# Configure logging
+vps-init myserver firewall logging high
 ```
 
 ### Managing Aliases
