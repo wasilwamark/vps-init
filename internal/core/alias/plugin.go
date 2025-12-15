@@ -126,8 +126,40 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (p *Plugin) Dependencies() []string {
-	return []string{}
+// Enhanced plugin interface methods
+func (p *Plugin) Validate() error {
+	// Alias plugin validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64"},
+		Tags:              []string{"core", "management", "alias"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        "alias",
+		Description: "Server alias management",
+		Version:     "1.0.0",
+		Author:      "VPS-Init Team",
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-init",
+		Tags:        []string{"core", "management", "alias"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
 }
 
 // Command handlers

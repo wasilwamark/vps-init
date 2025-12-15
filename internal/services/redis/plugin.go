@@ -28,12 +28,50 @@ func (p *Plugin) Author() string {
 	return "VPS-Init Team"
 }
 
-func (p *Plugin) Dependencies() []string {
-	return []string{"system"}
-}
 
 func (p *Plugin) Initialize(config map[string]interface{}) error {
 	return nil
+}
+
+func (p *Plugin) Validate() error {
+	// Redis plugin validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{
+		{
+			Name:     "system",
+			Version:  ">=1.0.0",
+			Optional: false,
+		},
+	}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64"},
+		Tags:              []string{"database", "cache", "production-ready"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        "redis",
+		Description: "Redis database server management",
+		Version:     "1.0.0",
+		Author:      "VPS-Init Team",
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-redis",
+		Tags:        []string{"database", "cache", "redis"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
 }
 
 func (p *Plugin) GetCommands() []plugin.Command {
@@ -94,6 +132,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 func (p *Plugin) GetRootCommand() *cobra.Command {
 	return nil
 }
+
 
 func (p *Plugin) Start(ctx context.Context) error {
 	return nil

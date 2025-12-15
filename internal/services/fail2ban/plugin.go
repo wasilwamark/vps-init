@@ -39,13 +39,49 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (p *Plugin) Dependencies() []string {
-	return []string{}
-}
+
 
 func (p *Plugin) GetRootCommand() *cobra.Command {
 	return nil
 }
+	// Enhanced plugin interface methods
+func (p *Plugin) Validate() error {
+	// TODO: Add plugin-specific validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{
+		// TODO: Add plugin dependencies with version constraints
+	}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64"},
+		Tags:              []string{"TODO", "add", "relevant", "tags"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        p.Name(),
+		Description: p.Description(),
+		Version:     p.Version(),
+		Author:      p.Author(),
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-init-plugins/" + p.Name(),
+		Tags:        []string{"TODO", "add", "tags"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
+}
+
 
 func (p *Plugin) GetCommands() []plugin.Command {
 	return []plugin.Command{

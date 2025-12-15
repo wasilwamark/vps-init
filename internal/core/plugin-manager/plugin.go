@@ -134,8 +134,40 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (p *Plugin) Dependencies() []string {
-	return []string{}
+// Enhanced plugin interface methods
+func (p *Plugin) Validate() error {
+	// Plugin manager validation logic
+	return nil
+}
+
+func (p *Plugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{}
+}
+
+func (p *Plugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "1.0.0",
+		GoVersion:         "1.19",
+		Platforms:         []string{"linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64"},
+		Tags:              []string{"core", "management", "plugin"},
+	}
+}
+
+func (p *Plugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        "plugin-manager",
+		Description: "Plugin management and discovery",
+		Version:     "1.0.0",
+		Author:      "VPS-Init Team",
+		License:     "MIT",
+		Repository:  "github.com/wasilwamark/vps-init",
+		Tags:        []string{"core", "management", "plugin"},
+		Validated:   true,
+		TrustLevel:  "official",
+		BuildInfo: plugin.BuildInfo{
+			GoVersion: "1.21",
+		},
+	}
 }
 
 // Command handlers
@@ -201,7 +233,11 @@ func (p *Plugin) handleInfo(ctx context.Context, conn *ssh.Connection, args []st
 	if len(deps) > 0 {
 		fmt.Printf("\nDependencies:\n")
 		for _, dep := range deps {
-			fmt.Printf("  - %s\n", dep)
+			version := ""
+			if dep.Version != "" {
+				version = " (" + dep.Version + ")"
+			}
+			fmt.Printf("  - %s%s\n", dep.Name, version)
 		}
 	}
 
@@ -248,6 +284,9 @@ func (p *Plugin) runLoad(cmd *cobra.Command, args []string) error {
 }
 
 func (p *Plugin) runInfo(cmd *cobra.Command, args []string) error {
+	if p.registry == nil {
+		p.registry = plugin.GetBuiltinRegistry()
+	}
 	pluginName := args[0]
 
 	pl, exists := p.registry.Get(pluginName)
@@ -274,7 +313,11 @@ func (p *Plugin) runInfo(cmd *cobra.Command, args []string) error {
 	if len(deps) > 0 {
 		fmt.Printf("\nDependencies:\n")
 		for _, dep := range deps {
-			fmt.Printf("  - %s\n", dep)
+			version := ""
+			if dep.Version != "" {
+				version = " (" + dep.Version + ")"
+			}
+			fmt.Printf("  - %s%s\n", dep.Name, version)
 		}
 	}
 
