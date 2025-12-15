@@ -8,6 +8,7 @@ import (
 	"github.com/wasilwamark/vps-init/internal/services/fail2ban"
 	"github.com/wasilwamark/vps-init/internal/services/mysql"
 	"github.com/wasilwamark/vps-init/internal/services/nginx"
+	"github.com/wasilwamark/vps-init/internal/services/redis"
 	"github.com/wasilwamark/vps-init/internal/services/restic"
 	"github.com/wasilwamark/vps-init/internal/services/runtimes"
 	"github.com/wasilwamark/vps-init/internal/services/system"
@@ -29,6 +30,7 @@ func initializeBuiltinPlugins() {
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/nginx", &nginx.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/wireguard", &wireguard.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/mysql", &mysql.Plugin{})
+	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/redis", &redis.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/wordpress", &wordpress.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/restic", &restic.Plugin{})
 	plugin.RegisterBuiltin("github.com/wasilwamark/vps-init/services/runtimes", &runtimes.Plugin{})
