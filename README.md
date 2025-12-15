@@ -75,9 +75,6 @@ VPS-Init is built on a modular plugin architecture.
 *   [**Restic**](docs/plugins/restic.md): S3 backup manager with database support.
 *   [**Language Runtime**](internal/services/runtimes/README.md): Multiple language runtime management (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
 
-### System Utilities
-
-*   [**System Management**](docs/plugins/system.md): Update OS packages, manage services, system upgrades.
 
 ### Plugin Features
 
@@ -149,10 +146,10 @@ vps-init myserver nginx install-ssl mydomain.com
 
 # Install WordPress with LEMP stack
 vps-init myserver wordpress install
-vps-init myserver wordpress create-site mydomain.com
 
 # Install Redis cache for WordPress
 vps-init myserver redis install
+vps-init myserver firewall allow 6379
 vps-init myserver firewall allow 6379
 ```
 
