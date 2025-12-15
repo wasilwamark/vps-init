@@ -3,6 +3,7 @@ package wireguard
 import (
 	"context"
 	"fmt"
+	"net/smtp"
 	"strings"
 	"time"
 
@@ -188,10 +189,16 @@ PrivateKey = %s
 
 func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: add-peer <name>")
+		return fmt.Errorf("usage: add-peer <name> [--email=email@example.com] [--smtp-host=smtp.gmail.com:587] [--smtp-user=user] [--smtp-pass=password] [--smtp-from=from@example.com]")
 	}
 	name := args[0]
 	pass := getSudoPass(flags)
+
+	// Get optional email parameter
+	email := ""
+	if val, ok := flags["email"].(string); ok {
+		email = val
+	}
 
 	// Generate Client Keys
 	cPriv, cPub, err := generateKeys(conn)
@@ -366,6 +373,17 @@ PersistentKeepalive = 25
 	tmpClient := fmt.Sprintf("/tmp/%s.conf", name)
 	conn.WriteFile(clientConfig, tmpClient)
 	conn.RunInteractive(fmt.Sprintf("qrencode -t ansiutf8 < %s", tmpClient))
+
+	// Send email if requested
+	if email != "" {
+		fmt.Printf("\n📧 Sending configuration to %s...\n", email)
+		if err := p.sendEmailConfig(conn, email, name, clientConfig, clientAddr, cPub, endpoint, flags); err != nil {
+			fmt.Printf("⚠️  Failed to send email: %v\n", err)
+			fmt.Printf("💡 You can manually send the configuration above to %s\n", email)
+		} else {
+			fmt.Printf("✅ Configuration sent successfully to %s\n", email)
+		}
+	}
 
 	// Clean up
 	conn.RunSudo(fmt.Sprintf("rm %s", tmpClient), pass)
@@ -818,6 +836,87 @@ func getMainInterface(conn *ssh.Connection) string {
 		return strings.TrimSpace(res.Stdout)
 	}
 	return "eth0" // Fallback
+}
+
+func (p *Plugin) sendEmailConfig(conn *ssh.Connection, email, name, clientConfig, clientAddr, cPub, endpoint string, flags map[string]interface{}) error {
+	// Get SMTP configuration from flags or use defaults
+	smtpHost := getSMTPFlag(flags, "smtp-host", "smtp.gmail.com:587")
+	smtpUser := getSMTPFlag(flags, "smtp-user", "")
+	smtpPass := getSMTPFlag(flags, "smtp-pass", "")
+	smtpFrom := getSMTPFlag(flags, "smtp-from", "")
+
+	// Validate required SMTP settings
+	if smtpUser == "" || smtpPass == "" {
+		return fmt.Errorf("SMTP user and password are required. Use --smtp-user and --smtp-pass flags")
+	}
+	if smtpFrom == "" {
+		smtpFrom = smtpUser
+	}
+
+	// Create email message
+	subject := fmt.Sprintf("WireGuard VPN Configuration - %s", name)
+	body := fmt.Sprintf(`Hello,
+
+Your WireGuard VPN configuration has been created successfully!
+
+Peer Name: %s
+Client IP: %s
+Server Endpoint: %s
+Client Public Key: %s
+
+Configuration File (ready to use):
+---
+%s
+---
+
+Note: The configuration file above already contains your private key.
+Simply save it as %s.conf and import it into your WireGuard client.
+
+Instructions:
+1. Save the configuration above as a .conf file (e.g., %s.conf)
+2. Import it into your WireGuard client:
+   - Mobile: Add the configuration file directly or scan the QR code from your terminal
+   - Desktop: Add the configuration file manually in WireGuard
+3. Connect to the VPN
+
+For security, please keep this configuration file safe and do not share it with others.
+The private key is included in the configuration file above.
+
+Best regards,
+VPS-Init WireGuard Plugin
+`, name, clientAddr, endpoint, cPub, clientConfig, name, name)
+
+	// Send email
+	msg := fmt.Sprintf("To: %s\r\nFrom: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", email, smtpFrom, subject, body)
+
+	// Parse SMTP host and port
+	parts := strings.Split(smtpHost, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid SMTP host format, expected host:port")
+	}
+
+	// Connect to SMTP server
+	auth := smtp.PlainAuth("", smtpUser, smtpPass, parts[0])
+	err := smtp.SendMail(smtpHost, auth, smtpFrom, []string{email}, []byte(msg))
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	return nil
+}
+
+func getSMTPFlag(flags map[string]interface{}, key, defaultValue string) string {
+	if val, ok := flags[key].(string); ok && val != "" {
+		return val
+	}
+
+	// Try to get from environment variables as fallback
+	envKey := fmt.Sprintf("WG_SMTP_%s", strings.ToUpper(key))
+	if val := strings.TrimSpace(fmt.Sprintf("%v", flags[envKey])); val != "" && val != "<nil>" {
+		return val
+	}
+
+	return defaultValue
 }
 
 func getSudoPass(flags map[string]interface{}) string {
