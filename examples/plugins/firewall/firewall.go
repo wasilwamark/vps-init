@@ -6,13 +6,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
 // FirewallPlugin implements the plugin interface
 type FirewallPlugin struct {
-	ssh    *ssh.Connection
+	ssh    ssh.Connection
 	config map[string]interface{}
 }
 
@@ -125,12 +125,35 @@ func (p *FirewallPlugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (p *FirewallPlugin) Dependencies() []string {
-	return []string{}
+func (p *FirewallPlugin) Dependencies() []plugin.Dependency {
+	return []plugin.Dependency{}
+}
+
+func (p *FirewallPlugin) Validate() error {
+	return nil
+}
+
+func (p *FirewallPlugin) Compatibility() plugin.Compatibility {
+	return plugin.Compatibility{
+		MinVPSInitVersion: "0.0.1",
+		GoVersion:         "1.21",
+		Platforms:         []string{"linux/amd64", "linux/arm64"},
+	}
+}
+
+func (p *FirewallPlugin) GetMetadata() plugin.PluginMetadata {
+	return plugin.PluginMetadata{
+		Name:        p.Name(),
+		Description: p.Description(),
+		Version:     p.Version(),
+		Author:      p.Author(),
+		License:     "MIT",
+		Tags:        []string{"firewall", "security", "ufw"},
+	}
 }
 
 // Command handlers
-func (p *FirewallPlugin) handleInstall(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleInstall(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	fmt.Println("🔥 Installing UFW firewall...")
@@ -146,7 +169,7 @@ func (p *FirewallPlugin) handleInstall(ctx context.Context, conn *ssh.Connection
 		defaultPolicy = dp
 	}
 
-	result := p.ssh.RunCommand(fmt.Sprintf("ufw default %s", defaultPolicy), false)
+	result := p.ssh.RunCommand(fmt.Sprintf("ufw default %s", defaultPolicy))
 	if !result.Success {
 		return fmt.Errorf("failed to set default policy")
 	}
@@ -158,14 +181,14 @@ func (p *FirewallPlugin) handleInstall(ctx context.Context, conn *ssh.Connection
 	}
 
 	if enableLogging {
-		result = p.ssh.RunCommand("ufw logging on", false)
+		result = p.ssh.RunCommand("ufw logging on")
 		if !result.Success {
 			return fmt.Errorf("failed to enable logging")
 		}
 	}
 
 	// Allow SSH by default
-	result = p.ssh.RunCommand("ufw allow ssh", false)
+	result = p.ssh.RunCommand("ufw allow ssh")
 	if !result.Success {
 		return fmt.Errorf("failed to allow SSH")
 	}
@@ -176,7 +199,7 @@ func (p *FirewallPlugin) handleInstall(ctx context.Context, conn *ssh.Connection
 	return nil
 }
 
-func (p *FirewallPlugin) handleAllow(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleAllow(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	if len(args) < 1 {
@@ -196,7 +219,7 @@ func (p *FirewallPlugin) handleAllow(ctx context.Context, conn *ssh.Connection, 
 		cmd = fmt.Sprintf("ufw allow %s", port)
 	}
 
-	result := p.ssh.RunCommand(cmd, false)
+	result := p.ssh.RunCommand(cmd)
 	if !result.Success {
 		return fmt.Errorf("failed to allow port %s", port)
 	}
@@ -205,7 +228,7 @@ func (p *FirewallPlugin) handleAllow(ctx context.Context, conn *ssh.Connection, 
 	return nil
 }
 
-func (p *FirewallPlugin) handleDeny(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleDeny(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	if len(args) < 1 {
@@ -215,7 +238,7 @@ func (p *FirewallPlugin) handleDeny(ctx context.Context, conn *ssh.Connection, a
 	port := args[0]
 	cmd := fmt.Sprintf("ufw deny %s", port)
 
-	result := p.ssh.RunCommand(cmd, false)
+	result := p.ssh.RunCommand(cmd)
 	if !result.Success {
 		return fmt.Errorf("failed to deny port %s", port)
 	}
@@ -224,10 +247,10 @@ func (p *FirewallPlugin) handleDeny(ctx context.Context, conn *ssh.Connection, a
 	return nil
 }
 
-func (p *FirewallPlugin) handleStatus(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleStatus(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
-	result := p.ssh.RunCommand("ufw status verbose", false)
+	result := p.ssh.RunCommand("ufw status verbose")
 	if result.Success {
 		fmt.Println(result.Stdout)
 	} else {
@@ -237,10 +260,10 @@ func (p *FirewallPlugin) handleStatus(ctx context.Context, conn *ssh.Connection,
 	return nil
 }
 
-func (p *FirewallPlugin) handleEnable(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleEnable(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
-	result := p.ssh.RunCommand("ufw --force enable", false)
+	result := p.ssh.RunCommand("ufw --force enable")
 	if !result.Success {
 		return fmt.Errorf("failed to enable firewall")
 	}
@@ -249,10 +272,10 @@ func (p *FirewallPlugin) handleEnable(ctx context.Context, conn *ssh.Connection,
 	return nil
 }
 
-func (p *FirewallPlugin) handleDisable(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleDisable(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
-	result := p.ssh.RunCommand("ufw disable", false)
+	result := p.ssh.RunCommand("ufw disable")
 	if !result.Success {
 		return fmt.Errorf("failed to disable firewall")
 	}

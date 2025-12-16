@@ -66,17 +66,22 @@ type Plugin interface {
     Version() string
     Author() string
 
+    // Initialization
+    Initialize(config map[string]interface{}) error
+    Validate() error
+
     // Commands
     GetCommands() []Command
     GetRootCommand() *cobra.Command
 
     // Lifecycle
-    Initialize(config map[string]interface{}) error
     Start(ctx context.Context) error
     Stop(ctx context.Context) error
 
     // Dependencies
-    Dependencies() []string
+    Dependencies() []Dependency
+    Compatibility() Compatibility
+    GetMetadata() PluginMetadata
 }
 ```
 
@@ -95,7 +100,7 @@ import (
     "context"
     "github.com/spf13/cobra"
     "github.com/wasilwamark/vps-init/pkg/plugin"
-    "github.com/wasilwamark/vps-init/internal/ssh"
+    "github.com/wasilwamark/vps-init-ssh"
 )
 
 type MyPlugin struct{}
@@ -109,18 +114,38 @@ func (p *MyPlugin) Name() string { return "my-tool" }
 func (p *MyPlugin) Description() string { return "My custom VPS tool" }
 func (p *MyPlugin) Version() string { return "1.0.0" }
 func (p *MyPlugin) Author() string { return "Me" }
-func (p *MyPlugin) Dependencies() []string { return []string{} }
+func (p *MyPlugin) Dependencies() []plugin.Dependency { return []plugin.Dependency{} }
 
 func (p *MyPlugin) Initialize(config map[string]interface{}) error { return nil }
+func (p *MyPlugin) Validate() error { return nil }
 func (p *MyPlugin) Start(ctx context.Context) error { return nil }
 func (p *MyPlugin) Stop(ctx context.Context) error { return nil }
+
+func (p *MyPlugin) Compatibility() plugin.Compatibility {
+    return plugin.Compatibility{
+        MinVPSInitVersion: "0.0.1",
+        GoVersion:         "1.21",
+        Platforms:         []string{"linux/amd64", "linux/arm64"},
+    }
+}
+
+func (p *MyPlugin) GetMetadata() plugin.PluginMetadata {
+    return plugin.PluginMetadata{
+        Name:        p.Name(),
+        Description: p.Description(),
+        Version:     p.Version(),
+        Author:      p.Author(),
+        License:     "MIT",
+        Tags:        []string{"example"},
+    }
+}
 
 func (p *MyPlugin) GetCommands() []plugin.Command {
     return []plugin.Command{
         {
             Name:        "do-something",
             Description: "Does something amazing on the VPS",
-            Handler: func(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+            Handler: func(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
                 return conn.RunInteractive("echo 'Hello from MyPlugin!'")
             },
         },
@@ -173,7 +198,7 @@ vps-init/
 ├── internal/
 │   ├── cli/                  # CLI coordination
 │   ├── services/             # Built-in service plugins (nginx, docker, etc.)
-│   └── ssh/                  # SSH connection logic
+│   └── core/                 # Core plugins (alias, plugin-manager)
 ├── pkg/plugin/               # Plugin system interfaces & loader
 └── docs/                     # Documentation
 ```
