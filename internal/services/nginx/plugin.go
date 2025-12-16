@@ -119,7 +119,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 		},
 		{
 			Name:        "logs",
-			Description: "Stream Nginx logs",
+			Description: "Stream Nginx logs [access|error|both]",
 			Handler:     p.logsHandler,
 		},
 		{
@@ -189,24 +189,36 @@ func (p *Plugin) serviceActionHandler(action string) plugin.CommandHandler {
 
 func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("📜 Streaming Nginx logs (Ctrl+C to stop)...")
-	// Using sudo for logs as accessing /var/log often requires root group or root
-	// But journalctl might work if user is in systemd-journal group.
-	// We'll try sudo interactive.
 
-	cmd := "journalctl -u nginx -f"
-	if pass := getSudoPass(flags); pass != "" {
-		// If we have password, we can construct a sudo command.
-		// BUT standard ssh RunInteractive relies on creating a PTY.
-		// Passing password securely to sudo in interactive PTY is tricky without 'expect'.
-		// So we will just run sudo and let the user type password if needed, OR
-		// if we really want to auto-inject, we use the non-interactive RunSudo but that doesn't stream nicely?
-		// Limitation: For interactive logs, we just let sudo ask for password if needed,
-		// OR we trust the user has passwordless sudo for specific commands.
-		// BETTER: Just run it. If it needs password, the PTY will show the prompt.
-		cmd = "sudo journalctl -u nginx -f"
-	} else {
-		// Just run sudo, it might prompt
-		cmd = "sudo journalctl -u nginx -f"
+	// Determine log type (access, error, or both)
+	logType := "both"
+	if len(args) > 0 {
+		logType = args[0]
+	}
+
+	var cmd string
+
+	switch logType {
+	case "access":
+		fmt.Println("📊 Showing access logs...")
+		// Tail access log with follow
+		cmd = "sudo tail -f /var/log/nginx/access.log"
+	case "error":
+		fmt.Println("❌ Showing error logs...")
+		// Tail error log with follow
+		cmd = "sudo tail -f /var/log/nginx/error.log"
+	case "both":
+		fmt.Println("📊 Access logs & ❌ Error logs...")
+		// Use multitail to show both logs if available, otherwise use tail with both files
+		checkMultitail := conn.RunCommand("which multitail", false)
+		if checkMultitail.Success {
+			cmd = "sudo multitail /var/log/nginx/access.log /var/log/nginx/error.log"
+		} else {
+			// Fallback to tail with both files
+			cmd = "sudo tail -f /var/log/nginx/access.log /var/log/nginx/error.log"
+		}
+	default:
+		return fmt.Errorf("invalid log type: %s. Use 'access', 'error', or 'both'", logType)
 	}
 
 	return conn.RunInteractive(cmd)
