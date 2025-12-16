@@ -99,3 +99,7 @@ logs/
 *.test
 *.prof
 go.work
+
+# plugins
+vps-init-ssh
+vps-init-keycloak

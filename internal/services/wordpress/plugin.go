@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -86,7 +86,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🐘 Installing PHP and Dependencies...")
 	pass := getSudoPass(flags)
 
@@ -95,8 +95,8 @@ func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args 
 
 	// Install PHP (and common Extensions), Curl, Unzip
 	pkgs := "php-fpm php-mysql php-curl php-gd php-mbstring php-xml php-xmlrpc php-soap php-intl php-zip unzip curl"
-	if res := conn.RunSudo(fmt.Sprintf("apt-get install -y %s", pkgs), pass); !res.Success {
-		return fmt.Errorf("php install failed: %s", res.Stderr)
+	if result := conn.RunSudo(fmt.Sprintf("apt-get install -y %s", pkgs), pass); !result.Success {
+		return fmt.Errorf("php install failed: %s", result.Stderr)
 	}
 
 	fmt.Println("🛠️  Installing WP-CLI...")
@@ -106,8 +106,8 @@ func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args 
 	conn.RunSudo("mv wp-cli.phar /usr/local/bin/wp", pass)
 
 	// Verify
-	if res := conn.RunCommand("wp --info", false); !res.Success {
-		fmt.Printf("Warning: WP-CLI install verification failed: %s\n", res.Stderr)
+	if result := conn.RunCommand("wp --info", ssh.WithHideOutput()); !result.Success {
+		fmt.Printf("Warning: WP-CLI install verification failed: %s\n", result.Stderr)
 	} else {
 		fmt.Println("✅ WP-CLI installed.")
 	}
@@ -116,12 +116,13 @@ func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args 
 	return nil
 }
 
-func (p *Plugin) createSiteHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) createSiteHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: create-site <domain>")
 	}
 	domain := args[0]
 	pass := getSudoPass(flags)
+	var result *ssh.Result
 
 	// Interactive Wizard
 	fmt.Println("🚀 Standard WordPress Deployment Wizard")
@@ -181,8 +182,8 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn *ssh.Connection, ar
 		fmt.Sprintf("mysql -u root -e \"GRANT ALL PRIVILEGES ON %s.* TO '%s'@'localhost'; FLUSH PRIVILEGES;\"", dbName, dbUser),
 	}
 	for _, cmd := range cmds {
-		if res := conn.RunSudo(cmd, pass); !res.Success {
-			return fmt.Errorf("db step failed: %s", res.Stderr)
+		result := conn.RunSudo(cmd, pass); if !result.Success {
+			return fmt.Errorf("db step failed: %s", result.Stderr)
 		}
 	}
 
@@ -194,23 +195,23 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn *ssh.Connection, ar
 
 	// 3. Download WordPress
 	fmt.Println("⬇️  Downloading WordPress...")
-	if res := conn.RunSudo(fmt.Sprintf("wp core download --path=%s --allow-root", webRoot), pass); !res.Success {
-		return fmt.Errorf("wp download failed: %s", res.Stderr)
+	result = conn.RunSudo(fmt.Sprintf("wp core download --path=%s --allow-root", webRoot), pass); if !result.Success {
+		return fmt.Errorf("wp download failed: %s", result.Stderr)
 	}
 
 	// 4. Create Config
 	fmt.Println("⚙️  Configuring wp-config.php...")
 	confCmd := fmt.Sprintf("wp config create --dbname=%s --dbuser=%s --dbpass='%s' --path=%s --allow-root", dbName, dbUser, dbPass, webRoot)
-	if res := conn.RunSudo(confCmd, pass); !res.Success {
-		return fmt.Errorf("wp config failed: %s", res.Stderr)
+	result = conn.RunSudo(confCmd, pass); if !result.Success {
+		return fmt.Errorf("wp config failed: %s", result.Stderr)
 	}
 
 	// 5. Install WordPress
 	fmt.Println("💿 Installing WordPress Core...")
 	instCmd := fmt.Sprintf("wp core install --url=http://%s --title='%s' --admin_user=%s --admin_password='%s' --admin_email=%s --path=%s --allow-root",
 		domain, domain, adminUser, adminPass, adminEmail, webRoot)
-	if res := conn.RunSudo(instCmd, pass); !res.Success {
-		return fmt.Errorf("wp install failed: %s", res.Stderr)
+	result = conn.RunSudo(instCmd, pass); if !result.Success {
+		return fmt.Errorf("wp install failed: %s", result.Stderr)
 	}
 
 	// 6. Permissions
@@ -222,7 +223,7 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn *ssh.Connection, ar
 	fmt.Println("🌐 Configuring Nginx...")
 	// We need to determine PHP socket path. Usually /run/php/php8.1-fpm.sock or similar.
 	// Let's try to find it.
-	sockRes := conn.RunCommand("find /run/php -name 'php*-fpm.sock' | head -n 1", false)
+	sockRes := conn.RunCommand("find /run/php -name 'php*-fpm.sock' | head -n 1", ssh.WithHideOutput())
 	phpSock := strings.TrimSpace(sockRes.Stdout)
 	if phpSock == "" {
 		phpSock = "unix:/var/run/php/php-fpm.sock" // fallback
@@ -252,16 +253,18 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn *ssh.Connection, ar
 `, domain, webRoot, phpSock)
 
 	tmpNginx := fmt.Sprintf("/tmp/nginx_%s", domain)
-	conn.WriteFile(nginxConf, tmpNginx)
+	err := conn.WriteFile(nginxConf, tmpNginx); if err != nil {
+		return fmt.Errorf("failed to write nginx config: %v", err)
+	}
 
 	conn.RunSudo(fmt.Sprintf("mv %s /etc/nginx/sites-available/%s", tmpNginx, domain), pass)
 	conn.RunSudo(fmt.Sprintf("ln -sf /etc/nginx/sites-available/%s /etc/nginx/sites-enabled/", domain, domain), pass)
 
 	// Test & Reload Nginx
-	if res := conn.RunSudo("nginx -t", pass); !res.Success {
+	result = conn.RunSudo("nginx -t", pass); if !result.Success {
 		// Rollback symlink
 		conn.RunSudo(fmt.Sprintf("rm /etc/nginx/sites-enabled/%s", domain), pass)
-		return fmt.Errorf("nginx config failed: %s", res.Stderr)
+		return fmt.Errorf("nginx config failed: %s", result.Stderr)
 	}
 	conn.RunSudo("systemctl reload nginx", pass)
 

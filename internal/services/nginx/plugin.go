@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -145,49 +145,50 @@ func (p *Plugin) GetCommands() []plugin.Command {
 	}
 }
 
-func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🌐 Installing Nginx...")
 
 	// 1. Update apt
-	if res := conn.RunSudo("apt-get update", getSudoPass(flags)); !res.Success {
-		return fmt.Errorf("failed to update apt: %s", res.Stderr)
+	if result := conn.RunSudo("apt-get update", getSudoPass(flags)); !result.Success {
+		return fmt.Errorf("failed to update apt: %s", result.Stderr)
 	}
 
 	// 2. Install nginx
-	if res := conn.RunSudo("apt-get install -y nginx", getSudoPass(flags)); !res.Success {
-		return fmt.Errorf("failed to install nginx: %s", res.Stderr)
+	if result := conn.RunSudo("apt-get install -y nginx", getSudoPass(flags)); !result.Success {
+		return fmt.Errorf("failed to install nginx: %s", result.Stderr)
 	}
 
 	fmt.Println("✅ Nginx installed successfully!")
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	return conn.RunInteractive("systemctl status nginx")
 }
 
 func (p *Plugin) serviceActionHandler(action string) plugin.CommandHandler {
-	return func(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	return func(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 		pass := getSudoPass(flags)
+		var result *ssh.Result
 
 		// For reload, always test config first
 		if action == "reload" {
 			fmt.Println("🔍 Testing Nginx configuration...")
-			if res := conn.RunSudo("nginx -t", pass); !res.Success {
-				return fmt.Errorf("nginx config test failed:\n%s", res.Stderr)
+			result = conn.RunSudo("nginx -t", pass); if !result.Success {
+				return fmt.Errorf("nginx config test failed:\n%s", result.Stderr)
 			}
 		}
 
 		fmt.Printf("⚙️  Running: systemctl %s nginx...\n", action)
-		if res := conn.RunSudo(fmt.Sprintf("systemctl %s nginx", action), pass); !res.Success {
-			return fmt.Errorf("failed to %s nginx: %s", action, res.Stderr)
+		if result = conn.RunSudo(fmt.Sprintf("systemctl %s nginx", action), pass); !result.Success {
+			return fmt.Errorf("failed to %s nginx: %s", action, result.Stderr)
 		}
 		fmt.Printf("✅ Nginx %sed successfully\n", action)
 		return nil
 	}
 }
 
-func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) logsHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("📜 Streaming Nginx logs (Ctrl+C to stop)...")
 
 	// Determine log type (access, error, or both)
@@ -210,7 +211,7 @@ func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []s
 	case "both":
 		fmt.Println("📊 Access logs & ❌ Error logs...")
 		// Use multitail to show both logs if available, otherwise use tail with both files
-		checkMultitail := conn.RunCommand("which multitail", false)
+		checkMultitail := conn.RunCommand("which multitail", ssh.WithHideOutput())
 		if checkMultitail.Success {
 			cmd = "sudo multitail /var/log/nginx/access.log /var/log/nginx/error.log"
 		} else {
@@ -224,16 +225,16 @@ func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []s
 	return conn.RunInteractive(cmd)
 }
 
-func (p *Plugin) listSitesHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) listSitesHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔍 Fetching configured sites...")
 
 	// List sites in sites-enabled
-	res := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", false)
-	if !res.Success {
-		return fmt.Errorf("failed to list sites: %s", res.Stderr)
+	result := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", ssh.WithHideOutput())
+	if !result.Success {
+		return fmt.Errorf("failed to list sites: %s", result.Stderr)
 	}
 
-	sites := strings.Split(strings.TrimSpace(res.Stdout), "\n")
+	sites := strings.Split(strings.TrimSpace(result.Stdout), "\n")
 	if len(sites) == 0 || (len(sites) == 1 && sites[0] == "") {
 		fmt.Println("No sites configured.")
 		return nil
@@ -246,11 +247,11 @@ func (p *Plugin) listSitesHandler(ctx context.Context, conn *ssh.Connection, arg
 		}
 
 		// Check if it's a symlink (enabled) or regular file
-		checkRes := conn.RunCommand(fmt.Sprintf("test -L /etc/nginx/sites-enabled/%s && echo 'symlink' || echo 'file'", site), false)
+		checkRes := conn.RunCommand(fmt.Sprintf("test -L /etc/nginx/sites-enabled/%s && echo 'symlink' || echo 'file'", site), ssh.WithHideOutput())
 		linkType := strings.TrimSpace(checkRes.Stdout)
 
 		// Check if SSL is configured by looking for listen 443 in the config
-		sslRes := conn.RunCommand(fmt.Sprintf("grep -q 'listen.*443' /etc/nginx/sites-enabled/%s && echo 'yes' || echo 'no'", site), false)
+		sslRes := conn.RunCommand(fmt.Sprintf("grep -q 'listen.*443' /etc/nginx/sites-enabled/%s && echo 'yes' || echo 'no'", site), ssh.WithHideOutput())
 		hasSSL := strings.TrimSpace(sslRes.Stdout) == "yes"
 
 		status := "✅"
@@ -269,7 +270,7 @@ func (p *Plugin) listSitesHandler(ctx context.Context, conn *ssh.Connection, arg
 	return nil
 }
 
-func (p *Plugin) addSiteHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) addSiteHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: add-site <domain> [--proxy <port>] [--file <local-path>] [--ssl]")
 	}
@@ -325,7 +326,7 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn *ssh.Connection, args 
 	// Create temp file securely? Or just echo to path.
 	// Since we need sudo to write to /etc/nginx, we write to /tmp first then move.
 	tmpPath := fmt.Sprintf("/tmp/nginx_%s.conf", domain)
-	if !conn.WriteFile(configContent, tmpPath) {
+	if err := conn.WriteFile(configContent, tmpPath); err != nil {
 		return fmt.Errorf("failed to write temp config")
 	}
 
@@ -339,15 +340,15 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn *ssh.Connection, args 
 
 	pass := getSudoPass(flags)
 	for _, cmd := range cmds {
-		if res := conn.RunSudo(cmd, pass); !res.Success {
-			return fmt.Errorf("failed step '%s': %s", cmd, res.Stderr)
+		result := conn.RunSudo(cmd, pass); if !result.Success {
+			return fmt.Errorf("failed step '%s': %s", cmd, result.Stderr)
 		}
 	}
 
 	// Verify Config with Rollback
 	fmt.Println("🔍 Testing Nginx configuration...")
-	if res := conn.RunSudo("nginx -t", pass); !res.Success {
-		fmt.Printf("❌ Config test failed details:\n%s\n", res.Stderr)
+	result := conn.RunSudo("nginx -t", pass); if !result.Success {
+		fmt.Printf("❌ Config test failed details:\n%s\n", result.Stderr)
 		fmt.Println("🔄 Rolling back changes...")
 		// Remove the symlink
 		conn.RunSudo(fmt.Sprintf("rm -f /etc/nginx/sites-enabled/%s", domain), pass)
@@ -355,8 +356,8 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn *ssh.Connection, args 
 	}
 
 	// Reload
-	if res := conn.RunSudo("systemctl reload nginx", pass); !res.Success {
-		return fmt.Errorf("failed to reload nginx: %s", res.Stderr)
+	result = conn.RunSudo("systemctl reload nginx", pass); if !result.Success {
+		return fmt.Errorf("failed to reload nginx: %s", result.Stderr)
 	}
 
 	fmt.Printf("✅ Site %s added and enabled!\n", domain)
@@ -369,7 +370,7 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn *ssh.Connection, args 
 	return nil
 }
 
-func (p *Plugin) removeSiteHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) removeSiteHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: remove-site <domain>")
 	}
@@ -385,8 +386,8 @@ func (p *Plugin) removeSiteHandler(ctx context.Context, conn *ssh.Connection, ar
 
 	pass := getSudoPass(flags)
 	for _, cmd := range cmds {
-		if res := conn.RunSudo(cmd, pass); !res.Success {
-			return fmt.Errorf("failed step '%s': %s", cmd, res.Stderr)
+		result := conn.RunSudo(cmd, pass); if !result.Success {
+			return fmt.Errorf("failed step '%s': %s", cmd, result.Stderr)
 		}
 	}
 
@@ -394,19 +395,19 @@ func (p *Plugin) removeSiteHandler(ctx context.Context, conn *ssh.Connection, ar
 	return nil
 }
 
-func (p *Plugin) installSSLHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installSSLHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	domain := ""
 	if len(args) > 0 {
 		domain = args[0]
 	} else {
 		// Interactive selection
 		fmt.Println("🔍 Fetching available sites...")
-		res := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", false)
-		if !res.Success {
-			return fmt.Errorf("failed to list sites: %s", res.Stderr)
+		result := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", ssh.WithHideOutput())
+		if !result.Success {
+			return fmt.Errorf("failed to list sites: %s", result.Stderr)
 		}
 
-		sites := strings.Split(strings.TrimSpace(res.Stdout), "\n")
+		sites := strings.Split(strings.TrimSpace(result.Stdout), "\n")
 		var validSites []string
 		for _, s := range sites {
 			if s != "" && s != "default" {
@@ -446,7 +447,7 @@ func (p *Plugin) installSSLHandler(ctx context.Context, conn *ssh.Connection, ar
 		"apt-get install -y certbot python3-certbot-nginx",
 	}
 	for _, cmd := range installCmds {
-		if res := conn.RunSudo(cmd, pass); !res.Success {
+		result := conn.RunSudo(cmd, pass); if !result.Success {
 			// Don't error immediately, might be installed
 		}
 	}

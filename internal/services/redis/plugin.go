@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -142,14 +142,14 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
 
 	fmt.Println("Installing Redis server...")
 
 	// Check if Redis is already installed
 	checkCmd := "redis-server --version"
-	if res := conn.RunCommand(checkCmd, false); res.Success {
+	if result := conn.RunCommand(checkCmd, ssh.WithHideOutput()); result.Success {
 		fmt.Println("Redis is already installed")
 		return nil
 	}
@@ -181,7 +181,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args 
 	return nil
 }
 
-func (p *Plugin) uninstallHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) uninstallHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
 
 	fmt.Println("Uninstalling Redis server...")
@@ -211,7 +211,7 @@ func (p *Plugin) uninstallHandler(ctx context.Context, conn *ssh.Connection, arg
 	return nil
 }
 
-func (p *Plugin) startHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) startHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
 
 	fmt.Println("Starting Redis service...")
@@ -223,7 +223,7 @@ func (p *Plugin) startHandler(ctx context.Context, conn *ssh.Connection, args []
 	return p.statusHandler(ctx, conn, args, flags)
 }
 
-func (p *Plugin) stopHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) stopHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
 
 	fmt.Println("Stopping Redis service...")
@@ -235,7 +235,7 @@ func (p *Plugin) stopHandler(ctx context.Context, conn *ssh.Connection, args []s
 	return nil
 }
 
-func (p *Plugin) restartHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) restartHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
 
 	fmt.Println("Restarting Redis service...")
@@ -247,36 +247,36 @@ func (p *Plugin) restartHandler(ctx context.Context, conn *ssh.Connection, args 
 	return p.statusHandler(ctx, conn, args, flags)
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("Checking Redis service status...")
 
 	// Check systemctl status
-	if res := conn.RunCommand("systemctl is-active redis-server", false); res.Success {
-		fmt.Printf("🟢 Redis service status: %s\n", strings.TrimSpace(res.Stdout))
+	if result := conn.RunCommand("systemctl is-active redis-server", ssh.WithHideOutput()); result.Success {
+		fmt.Printf("🟢 Redis service status: %s\n", strings.TrimSpace(result.Stdout))
 	} else {
 		fmt.Printf("❌ Redis service is not active\n")
 	}
 
 	// Check if Redis is listening
-	if res := conn.RunCommand("redis-cli ping 2>/dev/null || echo 'Not responding'", false); res.Success {
-		if strings.TrimSpace(res.Stdout) == "PONG" {
+	if result := conn.RunCommand("redis-cli ping 2>/dev/null || echo 'Not responding'", ssh.WithHideOutput()); result.Success {
+		if strings.TrimSpace(result.Stdout) == "PONG" {
 			fmt.Println("🟢 Redis server is responding")
 		} else {
-			fmt.Printf("🟡 Redis server status: %s\n", strings.TrimSpace(res.Stdout))
+			fmt.Printf("🟡 Redis server status: %s\n", strings.TrimSpace(result.Stdout))
 		}
 	} else {
 		fmt.Println("❌ Redis server is not responding")
 	}
 
 	// Show version if available
-	if res := conn.RunCommand("redis-server --version 2>/dev/null || echo 'Version not available'", false); res.Success {
-		fmt.Printf("📦 Version: %s\n", strings.TrimSpace(res.Stdout))
+	if result := conn.RunCommand("redis-server --version 2>/dev/null || echo 'Version not available'", ssh.WithHideOutput()); result.Success {
+		fmt.Printf("📦 Version: %s\n", strings.TrimSpace(result.Stdout))
 	}
 
 	return nil
 }
 
-func (p *Plugin) configureHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) configureHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 
 	configureScript := `
 echo "🔧 Redis Configuration Menu"
@@ -321,15 +321,15 @@ echo "✅ Redis service restarted!"
 	return conn.RunInteractive(configureScript)
 }
 
-func (p *Plugin) testHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) testHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("Testing Redis connection...")
 
 	// Test basic connectivity
-	if res := conn.RunCommand("redis-cli ping 2>/dev/null", false); res.Success {
-		if strings.TrimSpace(res.Stdout) == "PONG" {
+	if result := conn.RunCommand("redis-cli ping 2>/dev/null", ssh.WithHideOutput()); result.Success {
+		if strings.TrimSpace(result.Stdout) == "PONG" {
 			fmt.Println("✅ Redis server is responding!")
 		} else {
-			fmt.Printf("🟡 Unexpected response: %s\n", res.Stdout)
+			fmt.Printf("🟡 Unexpected response: %s\n", result.Stdout)
 		}
 	} else {
 		fmt.Println("❌ Failed to connect to Redis server")
@@ -341,40 +341,40 @@ func (p *Plugin) testHandler(ctx context.Context, conn *ssh.Connection, args []s
 	fmt.Println("\nTesting basic Redis operations...")
 
 	// Test SET operation
-	if res := conn.RunCommand("redis-cli set vps_init_test 'Hello from VPS-Init' 2>/dev/null", false); res.Success {
+	if result := conn.RunCommand("redis-cli set vps_init_test 'Hello from VPS-Init' 2>/dev/null", ssh.WithHideOutput()); result.Success {
 		fmt.Println("✅ SET operation successful")
 	} else {
 		fmt.Printf("❌ SET operation failed\n")
 	}
 
 	// Test GET operation
-	if res := conn.RunCommand("redis-cli get vps_init_test 2>/dev/null", false); res.Success {
-		fmt.Printf("✅ GET operation successful: %s\n", strings.TrimSpace(res.Stdout))
+	if result := conn.RunCommand("redis-cli get vps_init_test 2>/dev/null", ssh.WithHideOutput()); result.Success {
+		fmt.Printf("✅ GET operation successful: %s\n", strings.TrimSpace(result.Stdout))
 	} else {
 		fmt.Printf("❌ GET operation failed\n")
 	}
 
 	// Clean up test key
-	conn.RunCommand("redis-cli del vps_init_test 2>/dev/null", false)
+	conn.RunCommand("redis-cli del vps_init_test 2>/dev/null", ssh.WithHideOutput())
 
 	// Show Redis info
 	fmt.Println("\nRedis Server Information:")
-	if res := conn.RunCommand("redis-cli info server | head -10", false); res.Success {
-		fmt.Print(res.Stdout)
+	if result := conn.RunCommand("redis-cli info server | head -10", ssh.WithHideOutput()); result.Success {
+		fmt.Print(result.Stdout)
 	}
 
 	return nil
 }
 
-func (p *Plugin) infoHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) infoHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("Redis Server Information:")
 	fmt.Println("========================")
 
 	// Get Redis server info
-	if res := conn.RunCommand("redis-cli info server 2>/dev/null || echo 'Redis server not accessible'", false); res.Success {
-		if res.Stdout != "" {
+	if result := conn.RunCommand("redis-cli info server 2>/dev/null || echo 'Redis server not accessible'", ssh.WithHideOutput()); result.Success {
+		if result.Stdout != "" {
 			// Parse and display key information
-			lines := strings.Split(res.Stdout, "\n")
+			lines := strings.Split(result.Stdout, "\n")
 			for _, line := range lines {
 				if strings.Contains(line, "redis_version:") {
 					fmt.Printf("Version: %s\n", strings.TrimPrefix(line, "redis_version:"))
@@ -395,28 +395,28 @@ func (p *Plugin) infoHandler(ctx context.Context, conn *ssh.Connection, args []s
 	}
 
 	fmt.Println("\nMemory Usage:")
-	if res := conn.RunCommand("redis-cli info memory 2>/dev/null | grep -E '(used_memory_human|maxmemory_human)' || echo 'Memory info not available'", false); res.Success {
-		fmt.Print(res.Stdout)
+	if result := conn.RunCommand("redis-cli info memory 2>/dev/null | grep -E '(used_memory_human|maxmemory_human)' || echo 'Memory info not available'", ssh.WithHideOutput()); result.Success {
+		fmt.Print(result.Stdout)
 	}
 
 	fmt.Println("\nConnected Clients:")
-	if res := conn.RunCommand("redis-cli info clients 2>/dev/null | grep connected_clients || echo 'Client info not available'", false); res.Success {
-		fmt.Print(res.Stdout)
+	if result := conn.RunCommand("redis-cli info clients 2>/dev/null | grep connected_clients || echo 'Client info not available'", ssh.WithHideOutput()); result.Success {
+		fmt.Print(result.Stdout)
 	}
 
 	fmt.Println("\nDatabase Statistics:")
-	if res := conn.RunCommand("redis-cli info keyspace 2>/dev/null || echo 'Keyspace info not available'", false); res.Success {
-		if strings.TrimSpace(res.Stdout) == "" {
+	if result := conn.RunCommand("redis-cli info keyspace 2>/dev/null || echo 'Keyspace info not available'", ssh.WithHideOutput()); result.Success {
+		if strings.TrimSpace(result.Stdout) == "" {
 			fmt.Println("No database statistics available")
 		} else {
-			fmt.Print(res.Stdout)
+			fmt.Print(result.Stdout)
 		}
 	}
 
 	return nil
 }
 
-func (p *Plugin) backupHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) backupHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
 
 	fmt.Println("Creating Redis backup...")
@@ -429,11 +429,11 @@ func (p *Plugin) backupHandler(ctx context.Context, conn *ssh.Connection, args [
 	}
 
 	// Generate timestamp
-	res := conn.RunCommand("date '+%Y%m%d_%H%M%S'", false)
-	if !res.Success {
+	result := conn.RunCommand("date '+%Y%m%d_%H%M%S'", ssh.WithHideOutput())
+	if !result.Success {
 		return fmt.Errorf("failed to generate timestamp")
 	}
-	timestamp := strings.TrimSpace(res.Stdout)
+	timestamp := strings.TrimSpace(result.Stdout)
 
 	// Create backup
 	backupFile := fmt.Sprintf("%s/redis_backup_%s.rdb", backupDir, timestamp)
@@ -441,15 +441,15 @@ func (p *Plugin) backupHandler(ctx context.Context, conn *ssh.Connection, args [
 
 	// Use BGSAVE for non-blocking backup
 	fmt.Println("Triggering background save...")
-	if res := conn.RunCommand("redis-cli BGSAVE", false); !res.Success {
+	if result := conn.RunCommand("redis-cli BGSAVE", ssh.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to trigger background save")
 	}
 
 	// Wait for backup to complete
 	fmt.Println("Waiting for backup to complete...")
 	for i := 0; i < 30; i++ {
-		if res := conn.RunCommand("redis-cli LASTSAVE", false); res.Success {
-			fmt.Printf("Backup created successfully at timestamp: %s\n", strings.TrimSpace(res.Stdout))
+		if result := conn.RunCommand("redis-cli LASTSAVE", ssh.WithHideOutput()); result.Success {
+			fmt.Printf("Backup created successfully at timestamp: %s\n", strings.TrimSpace(result.Stdout))
 			break
 		}
 		fmt.Print(".")
@@ -470,8 +470,8 @@ func (p *Plugin) backupHandler(ctx context.Context, conn *ssh.Connection, args [
 
 	fmt.Printf("\n✅ Redis backup created successfully!\n")
 	fmt.Printf("Backup file: %s\n", backupFile)
-	if res := conn.RunCommand(fmt.Sprintf("sudo ls -lh %s | awk '{print $5}'", backupFile), false); res.Success {
-		fmt.Printf("Size: %s\n", strings.TrimSpace(res.Stdout))
+	if result := conn.RunCommand(fmt.Sprintf("sudo ls -lh %s | awk '{print $5}'", backupFile), ssh.WithHideOutput()); result.Success {
+		fmt.Printf("Size: %s\n", strings.TrimSpace(result.Stdout))
 	}
 
 	return nil

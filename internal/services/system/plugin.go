@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -155,7 +155,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 // Command Handlers
 
 // Helper for sudo errors
-func (p *Plugin) checkSudoResult(result *ssh.CommandResult, flags map[string]interface{}) error {
+func (p *Plugin) checkSudoResult(result *ssh.Result, flags map[string]interface{}) error {
 	if result.Success {
 		return nil
 	}
@@ -180,7 +180,7 @@ func (p *Plugin) checkSudoResult(result *ssh.CommandResult, flags map[string]int
 	return fmt.Errorf(errMsg)
 }
 
-func (p *Plugin) handleUpdate(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleUpdate(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔄 Updating package lists...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
@@ -194,7 +194,7 @@ func (p *Plugin) handleUpdate(ctx context.Context, conn *ssh.Connection, args []
 	return nil
 }
 
-func (p *Plugin) handleUpgrade(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleUpgrade(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("⬆️  Upgrading packages...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
@@ -208,7 +208,7 @@ func (p *Plugin) handleUpgrade(ctx context.Context, conn *ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) handleFullUpgrade(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleFullUpgrade(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🚀 Performing full system upgrade...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
@@ -221,7 +221,7 @@ func (p *Plugin) handleFullUpgrade(ctx context.Context, conn *ssh.Connection, ar
 	return nil
 }
 
-func (p *Plugin) handleAutoremove(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleAutoremove(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🧹 Removing unused packages...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
@@ -234,12 +234,12 @@ func (p *Plugin) handleAutoremove(ctx context.Context, conn *ssh.Connection, arg
 	return nil
 }
 
-func (p *Plugin) handleShell(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
-	fmt.Printf("🔌 Connecting to %s@%s...\n", conn.User, conn.Host)
+func (p *Plugin) handleShell(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+	fmt.Println("🔌 Opening interactive shell...")
 	return conn.Shell()
 }
 
-func (p *Plugin) handleInstall(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleInstall(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: install <package1> [package2...]")
 	}
@@ -260,7 +260,7 @@ func (p *Plugin) handleInstall(ctx context.Context, conn *ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) handleUninstall(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleUninstall(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: uninstall <package1> [package2...]")
 	}

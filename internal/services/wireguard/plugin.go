@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -101,26 +101,26 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🛡️  Installing Wireguard & Tools...")
 	pass := getSudoPass(flags)
 
 	// Update first
-	if res := conn.RunSudo("apt-get update", pass); !res.Success {
-		return fmt.Errorf("apt update failed: %s", res.Stderr)
+	result := conn.RunSudo("apt-get update", pass); if !result.Success {
+		return fmt.Errorf("apt update failed: %s", result.Stderr)
 	}
 
 	// Install packages: wireguard, wireguard-tools, qrencode (for QR display)
 	pkgs := "wireguard wireguard-tools qrencode iptables"
-	if res := conn.RunSudo(fmt.Sprintf("apt-get install -y %s", pkgs), pass); !res.Success {
-		return fmt.Errorf("installation failed: %s", res.Stderr)
+	if result = conn.RunSudo(fmt.Sprintf("apt-get install -y %s", pkgs), pass); !result.Success {
+		return fmt.Errorf("installation failed: %s", result.Stderr)
 	}
 
 	fmt.Println("✅ Wireguard installed.")
 	return nil
 }
 
-func (p *Plugin) setupHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) setupHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("⚙️  Setting up Wireguard Server...")
 	pass := getSudoPass(flags)
 
@@ -155,14 +155,14 @@ PrivateKey = %s
 
 	// Write Config
 	tmpPath := "/tmp/wg0.conf"
-	if !conn.WriteFile(config, tmpPath) {
+	if err := conn.WriteFile(config, tmpPath); err != nil {
 		return fmt.Errorf("failed to write tmp config")
 	}
 
 	// Move to /etc/wireguard/
 	conn.RunSudo("mkdir -p /etc/wireguard", pass)
-	if res := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpPath), pass); !res.Success {
-		return fmt.Errorf("failed to move config: %s", res.Stderr)
+	if result := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpPath), pass); !result.Success {
+		return fmt.Errorf("failed to move config: %s", result.Stderr)
 	}
 	conn.RunSudo("chmod 600 /etc/wireguard/wg0.conf", pass)
 
@@ -176,18 +176,18 @@ PrivateKey = %s
 	conn.RunSudo(fmt.Sprintf("ufw allow %s/udp", port), pass)
 
 	// 6. Start Service
-	if res := conn.RunSudo("systemctl enable wg-quick@wg0", pass); !res.Success {
-		return fmt.Errorf("failed to enable service: %s", res.Stderr)
+	result := conn.RunSudo("systemctl enable wg-quick@wg0", pass); if !result.Success {
+		return fmt.Errorf("failed to enable service: %s", result.Stderr)
 	}
-	if res := conn.RunSudo("systemctl start wg-quick@wg0", pass); !res.Success {
-		return fmt.Errorf("failed to start service: %s", res.Stderr)
+	result = conn.RunSudo("systemctl start wg-quick@wg0", pass); if !result.Success {
+		return fmt.Errorf("failed to start service: %s", result.Stderr)
 	}
 
 	fmt.Printf("✅ Wireguard Server configured and running!\nPublic Key: %s\n", pubKey)
 	return nil
 }
 
-func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) addPeerHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: add-peer <name> [--email=email@example.com] [--smtp-host=smtp.gmail.com:587] [--smtp-user=user] [--smtp-pass=password] [--smtp-from=from@example.com]")
 	}
@@ -207,13 +207,13 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	}
 
 	// Get Server Public Key
-	res := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
-	if !res.Success {
-		return fmt.Errorf("failed to read server config: %s", res.Stderr)
+	result := conn.RunSudo("cat /etc/wireguard/wg0.conf", pass)
+	if !result.Success {
+		return fmt.Errorf("failed to read server config: %s", result.Stderr)
 	}
 
 	// Parse the config to extract the private key
-	lines := strings.Split(res.Stdout, "\n")
+	lines := strings.Split(result.Stdout, "\n")
 	var sPriv string
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -231,15 +231,15 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	}
 
 	// Derive public from private because getting it from wg show might require it running
-	sPubRes := conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", sPriv), false)
+	sPubRes := conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", sPriv), ssh.WithHideOutput())
 	if !sPubRes.Success {
 		return fmt.Errorf("failed to derive server public key: %s", sPubRes.Stderr)
 	}
 	sPub := strings.TrimSpace(sPubRes.Stdout)
 
 	// Find available IP by checking existing peers
-	res = conn.RunSudo("grep AllowedIPs /etc/wireguard/wg0.conf | grep -oE '10\\.100\\.0\\.[0-9]+' | sort -V | tail -1", pass)
-	lastIP := strings.TrimSpace(res.Stdout)
+	result = conn.RunSudo("grep AllowedIPs /etc/wireguard/wg0.conf | grep -oE '10\\.100\\.0\\.[0-9]+' | sort -V | tail -1", pass)
+	lastIP := strings.TrimSpace(result.Stdout)
 	var ipSuffix int
 	if lastIP != "" {
 		// Extract the last octet and increment
@@ -252,7 +252,13 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 
 	// Get Server Endpoint (Public IP)
 	// Try to guess or use host
-	endpoint := fmt.Sprintf("%s:51820", conn.Host)
+	// Try to get the public IP from the server
+	result = conn.RunCommand("curl -s ifconfig.me || curl -s ipinfo.io/ip || echo 'YOUR_SERVER_IP'", ssh.WithHideOutput())
+	endpoint := fmt.Sprintf("%s:51820", strings.TrimSpace(result.Stdout))
+	if result.Stdout == "" || strings.Contains(result.Stdout, "YOUR_SERVER_IP") {
+		fmt.Println("⚠️  Could not auto-detect server IP. Please manually set the Endpoint in the client config.")
+		endpoint = "YOUR_SERVER_IP:51820"
+	}
 
 	// First, backup existing names from current config
 	var existingNames []struct {
@@ -286,8 +292,8 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 	}
 
 	// Add peer to runtime first
-	if res := conn.RunSudo(fmt.Sprintf("wg set wg0 peer %s allowed-ips %s", cPub, clientIP), pass); !res.Success {
-		return fmt.Errorf("failed to add peer to runtime: %s", res.Stderr)
+	if result = conn.RunSudo(fmt.Sprintf("wg set wg0 peer %s allowed-ips %s", cPub, clientIP), pass); !result.Success {
+		return fmt.Errorf("failed to add peer to runtime: %s", result.Stderr)
 	}
 
 	// Save runtime config (this will strip comments)
@@ -330,11 +336,13 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn *ssh.Connection, args 
 		// Write the updated config with all names preserved
 		newConfigStr := strings.Join(newConfig, "\n")
 		tmpConfig := "/tmp/wg0_with_all_names.conf"
-		conn.WriteFile(newConfigStr, tmpConfig)
+		if err := conn.WriteFile(newConfigStr, tmpConfig); err != nil {
+			return fmt.Errorf("failed to write updated config: %w", err)
+		}
 
 		// Replace the config file
-		if res := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpConfig), pass); !res.Success {
-			return fmt.Errorf("failed to update config with names: %s", res.Stderr)
+		if result = conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpConfig), pass); !result.Success {
+			return fmt.Errorf("failed to update config with names: %s", result.Stderr)
 		}
 		conn.RunSudo("chmod 600 /etc/wireguard/wg0.conf", pass)
 	}
@@ -371,7 +379,9 @@ PersistentKeepalive = 25
 	fmt.Printf("\n📱 Scan this QR Code to add to your Wireguard client:\n")
 	// Write to tmp file then qrencode
 	tmpClient := fmt.Sprintf("/tmp/%s.conf", name)
-	conn.WriteFile(clientConfig, tmpClient)
+	if err := conn.WriteFile(clientConfig, tmpClient); err != nil {
+		return fmt.Errorf("failed to write client config: %w", err)
+	}
 	conn.RunInteractive(fmt.Sprintf("qrencode -t ansiutf8 < %s", tmpClient))
 
 	// Send email if requested
@@ -390,7 +400,7 @@ PersistentKeepalive = 25
 	return nil
 }
 
-func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) removePeerHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
 	// Get the config file to list peers
@@ -566,7 +576,7 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, ar
 	// Write new config
 	newConfigStr := strings.Join(newConfig, "\n")
 	tmpPath := "/tmp/wg0_new.conf"
-	if !conn.WriteFile(newConfigStr, tmpPath) {
+	if err := conn.WriteFile(newConfigStr, tmpPath); err != nil {
 		return fmt.Errorf("failed to write new config")
 	}
 
@@ -574,8 +584,8 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, ar
 	backupPath := fmt.Sprintf("/etc/wireguard/wg0.conf.bak.%d", time.Now().Unix())
 	conn.RunSudo(fmt.Sprintf("cp /etc/wireguard/wg0.conf %s", backupPath), pass)
 
-	if res := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpPath), pass); !res.Success {
-		return fmt.Errorf("failed to update config file: %s", res.Stderr)
+	if result := conn.RunSudo(fmt.Sprintf("mv %s /etc/wireguard/wg0.conf", tmpPath), pass); !result.Success {
+		return fmt.Errorf("failed to update config file: %s", result.Stderr)
 	}
 
 	// Reload configuration
@@ -593,14 +603,14 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn *ssh.Connection, ar
 }
 
 
-func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔌 Wireguard Service Status:")
 	conn.RunInteractive("systemctl status wg-quick@wg0")
 	fmt.Println("\n📊 Interface Status:")
 	return conn.RunInteractive("sudo wg show")
 }
 
-func (p *Plugin) listPeersHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) listPeersHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
 	fmt.Println("🔌 WireGuard Peers Overview")
@@ -797,14 +807,14 @@ func (p *Plugin) listPeersHandler(ctx context.Context, conn *ssh.Connection, arg
 	return nil
 }
 
-func (p *Plugin) restartHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) restartHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔄 Restarting Wireguard service...")
 	pass := getSudoPass(flags)
 
 	// Restart the service
-	res := conn.RunSudo("systemctl restart wg-quick@wg0", pass)
-	if !res.Success {
-		return fmt.Errorf("failed to restart Wireguard service: %s", res.Stderr)
+	result := conn.RunSudo("systemctl restart wg-quick@wg0", pass)
+	if !result.Success {
+		return fmt.Errorf("failed to restart Wireguard service: %s", result.Stderr)
 	}
 
 	fmt.Println("✅ Wireguard service restarted successfully")
@@ -813,32 +823,32 @@ func (p *Plugin) restartHandler(ctx context.Context, conn *ssh.Connection, args 
 
 // Helpers
 
-func generateKeys(conn *ssh.Connection) (string, string, error) {
+func generateKeys(conn ssh.Connection) (string, string, error) {
 	// Returns private, public
-	res := conn.RunCommand("wg genkey", false)
-	if !res.Success {
-		return "", "", fmt.Errorf("failed to gen key: %s", res.Stderr)
+	result := conn.RunCommand("wg genkey", ssh.WithHideOutput())
+	if !result.Success {
+		return "", "", fmt.Errorf("failed to gen key: %s", result.Stderr)
 	}
-	priv := strings.TrimSpace(res.Stdout)
+	priv := strings.TrimSpace(result.Stdout)
 
-	res = conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", priv), false)
-	if !res.Success {
+	result = conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", priv), ssh.WithHideOutput())
+	if !result.Success {
 		return "", "", fmt.Errorf("failed to gen pub key")
 	}
-	pub := strings.TrimSpace(res.Stdout)
+	pub := strings.TrimSpace(result.Stdout)
 	return priv, pub, nil
 }
 
-func getMainInterface(conn *ssh.Connection) string {
+func getMainInterface(conn ssh.Connection) string {
 	// Try to guess default interface
-	res := conn.RunCommand("ip route | grep default | awk '{print $5}'", false)
-	if res.Success {
-		return strings.TrimSpace(res.Stdout)
+	result := conn.RunCommand("ip route | grep default | awk '{print $5}'", ssh.WithHideOutput())
+	if result.Success {
+		return strings.TrimSpace(result.Stdout)
 	}
 	return "eth0" // Fallback
 }
 
-func (p *Plugin) sendEmailConfig(conn *ssh.Connection, email, name, clientConfig, clientAddr, cPub, endpoint string, flags map[string]interface{}) error {
+func (p *Plugin) sendEmailConfig(conn ssh.Connection, email, name, clientConfig, clientAddr, cPub, endpoint string, flags map[string]interface{}) error {
 	// Get SMTP configuration from flags or use defaults
 	smtpHost := getSMTPFlag(flags, "smtp-host", "smtp.gmail.com:587")
 	smtpUser := getSMTPFlag(flags, "smtp-user", "")

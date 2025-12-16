@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -140,21 +140,21 @@ func (p *Plugin) GetCommands() []plugin.Command {
 	}
 }
 
-func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🐳 Installing Docker...")
 
 	// using convenience script
 	cmd := "curl -fsSL https://get.docker.com | sh"
 	pass := getSudoPass(flags)
 
-	if res := conn.RunSudo(cmd, pass); !res.Success {
-		return fmt.Errorf("failed to install docker: %s", res.Stderr)
+	result := conn.RunSudo(cmd, pass); if !result.Success {
+		return fmt.Errorf("failed to install docker: %s", result.Stderr)
 	}
 
 	// Add user to docker group
 	fmt.Println("👤 Adding user to docker group...")
-	if res := conn.RunSudo("usermod -aG docker $USER", pass); !res.Success {
-		fmt.Printf("⚠️  Failed to add user to docker group: %s\n", res.Stderr)
+	result = conn.RunSudo("usermod -aG docker $USER", pass); if !result.Success {
+		fmt.Printf("⚠️  Failed to add user to docker group: %s\n", result.Stderr)
 	} else {
 		fmt.Println("✅ User added to docker group (requires re-login to take effect)")
 	}
@@ -163,17 +163,17 @@ func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args 
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	return conn.RunInteractive("systemctl status docker")
 }
 
-func (p *Plugin) composeHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) composeHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	// Reconstruct command line arguments
 	cmd := "docker compose " + strings.Join(args, " ")
 	return conn.RunInteractive(cmd)
 }
 
-func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) logsHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		// Default to compose logs if no container specified
 		fmt.Println("📜 Streaming docker compose logs...")
@@ -185,14 +185,14 @@ func (p *Plugin) logsHandler(ctx context.Context, conn *ssh.Connection, args []s
 }
 
 func (p *Plugin) simpleDockerHandler(subcmd string) plugin.CommandHandler {
-	return func(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	return func(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 		cmd := fmt.Sprintf("docker %s", subcmd)
 		return conn.RunInteractive(cmd)
 	}
 }
 
 func (p *Plugin) simpleComposeHandler(subcmd string) plugin.CommandHandler {
-	return func(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+	return func(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 		// Allow passing extra args e.g. vps-init alias docker up --build
 		argsStr := strings.Join(args, " ")
 		cmd := fmt.Sprintf("docker compose %s %s", subcmd, argsStr)

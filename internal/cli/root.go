@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/config"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	vps_ssh "github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -171,8 +171,8 @@ func executeDirectCommand() {
 	host := parts[1]
 
 	ctx := context.Background()
-	conn := ssh.New(host, user)
-	// ssh.New does not return error, it just creates the struct
+	conn := vps_ssh.New(host, user)
+	// vps_ssh.New does not return error, it just creates the struct
 	defer conn.Disconnect()
 
 	if !conn.Connect() {

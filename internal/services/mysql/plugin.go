@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init/internal/ssh"
+	"github.com/wasilwamark/vps-init-ssh"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -89,18 +89,18 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🗄️  Installing MariaDB Server...")
 	pass := getSudoPass(flags)
 
 	// Update
-	if res := conn.RunSudo("apt-get update", pass); !res.Success {
-		return fmt.Errorf("apt update failed: %s", res.Stderr)
+	result := conn.RunSudo("apt-get update", pass); if !result.Success {
+		return fmt.Errorf("apt update failed: %s", result.Stderr)
 	}
 
 	// Install
-	if res := conn.RunSudo("apt-get install -y mariadb-server", pass); !res.Success {
-		return fmt.Errorf("installation failed: %s", res.Stderr)
+	result = conn.RunSudo("apt-get install -y mariadb-server", pass); if !result.Success {
+		return fmt.Errorf("installation failed: %s", result.Stderr)
 	}
 
 	// Secure Installation
@@ -116,13 +116,15 @@ DELETE FROM mysql.db WHERE Db='test' OR Db='test_%';
 FLUSH PRIVILEGES;
 `
 	// Write to tmp file
-	conn.WriteFile(secureSql, "/tmp/secure_mysql.sql")
+	if err := conn.WriteFile(secureSql, "/tmp/secure_mysql.sql"); err != nil {
+		return fmt.Errorf("failed to write secure sql file: %w", err)
+	}
 
 	// Execute as root
-	if res := conn.RunSudo("mysql -u root < /tmp/secure_mysql.sql", pass); !res.Success {
+	result = conn.RunSudo("mysql -u root < /tmp/secure_mysql.sql", pass); if !result.Success {
 		// Verify if it failed because it's already secured (maybe root has password now?)
 		// If it fails, log warning but continue
-		fmt.Printf("Warning: automated security script had issues: %s\n", res.Stderr)
+		fmt.Printf("Warning: automated security script had issues: %s\n", result.Stderr)
 	}
 	conn.RunSudo("rm /tmp/secure_mysql.sql", pass)
 
@@ -130,7 +132,7 @@ FLUSH PRIVILEGES;
 	return nil
 }
 
-func (p *Plugin) createDbHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) createDbHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: create-db <dbname>")
 	}
@@ -140,15 +142,15 @@ func (p *Plugin) createDbHandler(ctx context.Context, conn *ssh.Connection, args
 	fmt.Printf("Creating database %s...\n", dbName)
 	cmd := fmt.Sprintf("mysql -u root -e 'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'", dbName)
 
-	if res := conn.RunSudo(cmd, pass); !res.Success {
-		return fmt.Errorf("failed to create db: %s", res.Stderr)
+	result := conn.RunSudo(cmd, pass); if !result.Success {
+		return fmt.Errorf("failed to create db: %s", result.Stderr)
 	}
 
 	fmt.Printf("✅ Database %s created.\n", dbName)
 	return nil
 }
 
-func (p *Plugin) createUserHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) createUserHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: create-user <username> <password>")
 	}
@@ -160,15 +162,15 @@ func (p *Plugin) createUserHandler(ctx context.Context, conn *ssh.Connection, ar
 	// Create user allowing connection from localhost
 	cmd := fmt.Sprintf("mysql -u root -e \"CREATE USER IF NOT EXISTS '%s'@'localhost' IDENTIFIED BY '%s';\"", user, dbPass)
 
-	if res := conn.RunSudo(cmd, pass); !res.Success {
-		return fmt.Errorf("failed to create user: %s", res.Stderr)
+	result := conn.RunSudo(cmd, pass); if !result.Success {
+		return fmt.Errorf("failed to create user: %s", result.Stderr)
 	}
 
 	fmt.Printf("✅ User %s created.\n", user)
 	return nil
 }
 
-func (p *Plugin) grantHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) grantHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: grant <username> <dbname>")
 	}
@@ -179,15 +181,15 @@ func (p *Plugin) grantHandler(ctx context.Context, conn *ssh.Connection, args []
 	fmt.Printf("Granting privileges to %s on %s...\n", user, dbName)
 	cmd := fmt.Sprintf("mysql -u root -e \"GRANT ALL PRIVILEGES ON %s.* TO '%s'@'localhost'; FLUSH PRIVILEGES;\"", dbName, user)
 
-	if res := conn.RunSudo(cmd, pass); !res.Success {
-		return fmt.Errorf("failed to grant privileges: %s", res.Stderr)
+	result := conn.RunSudo(cmd, pass); if !result.Success {
+		return fmt.Errorf("failed to grant privileges: %s", result.Stderr)
 	}
 
 	fmt.Println("✅ Privileges granted.")
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn *ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
 	return conn.RunInteractive("systemctl status mariadb")
 }
 
