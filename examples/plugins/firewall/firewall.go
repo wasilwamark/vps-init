@@ -5,19 +5,17 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
-	"github.com/wasilwamark/vps-init-ssh"
-	"github.com/wasilwamark/vps-init/pkg/plugin"
+	"github.com/wasilwamark/vps-init-core"
 )
 
 // FirewallPlugin implements the plugin interface
 type FirewallPlugin struct {
-	ssh    ssh.Connection
+	ssh    core.Connection
 	config map[string]interface{}
 }
 
 // NewPlugin creates a new firewall plugin
-func NewPlugin() plugin.Plugin {
+func NewPlugin() core.Plugin {
 	return &FirewallPlugin{}
 }
 
@@ -42,23 +40,23 @@ func (p *FirewallPlugin) Initialize(config map[string]interface{}) error {
 	return nil
 }
 
-func (p *FirewallPlugin) GetCommands() []plugin.Command {
-	return []plugin.Command{
+func (p *FirewallPlugin) GetCommands() []core.Command {
+	return []core.Command{
 		{
 			Name:        "install",
 			Description: "Install and configure UFW firewall",
-			Flags: []plugin.Flag{
+			Flags: []core.Flag{
 				{
 					Name:        "default-policy",
 					Description: "Default firewall policy (allow/deny)",
 					Default:     "deny",
-					Type:        plugin.ArgumentTypeString,
+					Type:        core.ArgumentTypeString,
 				},
 				{
 					Name:        "enable-logging",
 					Description: "Enable firewall logging",
 					Default:     true,
-					Type:        plugin.ArgumentTypeBool,
+					Type:        core.ArgumentTypeBool,
 				},
 			},
 			Handler: p.handleInstall,
@@ -66,17 +64,17 @@ func (p *FirewallPlugin) GetCommands() []plugin.Command {
 		{
 			Name:        "allow",
 			Description: "Allow traffic through firewall",
-			Args: []plugin.Argument{
+			Args: []core.Argument{
 				{
 					Name:        "port",
 					Description: "Port number or service name",
 					Required:    true,
-					Type:        plugin.ArgumentTypeString,
+					Type:        core.ArgumentTypeString,
 				},
 				{
 					Name:        "protocol",
 					Description: "Protocol (tcp/udp)",
-					Type:        plugin.ArgumentTypeString,
+					Type:        core.ArgumentTypeString,
 				},
 			},
 			Handler: p.handleAllow,
@@ -84,12 +82,12 @@ func (p *FirewallPlugin) GetCommands() []plugin.Command {
 		{
 			Name:        "deny",
 			Description: "Deny traffic through firewall",
-			Args: []plugin.Argument{
+			Args: []core.Argument{
 				{
 					Name:        "port",
 					Description: "Port number or service name",
 					Required:    true,
-					Type:        plugin.ArgumentTypeString,
+					Type:        core.ArgumentTypeString,
 				},
 			},
 			Handler: p.handleDeny,
@@ -125,24 +123,24 @@ func (p *FirewallPlugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (p *FirewallPlugin) Dependencies() []plugin.Dependency {
-	return []plugin.Dependency{}
+func (p *FirewallPlugin) Dependencies() []core.Dependency {
+	return []core.Dependency{}
 }
 
 func (p *FirewallPlugin) Validate() error {
 	return nil
 }
 
-func (p *FirewallPlugin) Compatibility() plugin.Compatibility {
-	return plugin.Compatibility{
+func (p *FirewallPlugin) Compatibility() core.Compatibility {
+	return core.Compatibility{
 		MinVPSInitVersion: "0.0.1",
 		GoVersion:         "1.21",
 		Platforms:         []string{"linux/amd64", "linux/arm64"},
 	}
 }
 
-func (p *FirewallPlugin) GetMetadata() plugin.PluginMetadata {
-	return plugin.PluginMetadata{
+func (p *FirewallPlugin) GetMetadata() core.PluginMetadata {
+	return core.PluginMetadata{
 		Name:        p.Name(),
 		Description: p.Description(),
 		Version:     p.Version(),
@@ -153,7 +151,7 @@ func (p *FirewallPlugin) GetMetadata() plugin.PluginMetadata {
 }
 
 // Command handlers
-func (p *FirewallPlugin) handleInstall(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleInstall(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	fmt.Println("🔥 Installing UFW firewall...")
@@ -199,7 +197,7 @@ func (p *FirewallPlugin) handleInstall(ctx context.Context, conn ssh.Connection,
 	return nil
 }
 
-func (p *FirewallPlugin) handleAllow(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleAllow(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	if len(args) < 1 {
@@ -228,7 +226,7 @@ func (p *FirewallPlugin) handleAllow(ctx context.Context, conn ssh.Connection, a
 	return nil
 }
 
-func (p *FirewallPlugin) handleDeny(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleDeny(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	if len(args) < 1 {
@@ -247,7 +245,7 @@ func (p *FirewallPlugin) handleDeny(ctx context.Context, conn ssh.Connection, ar
 	return nil
 }
 
-func (p *FirewallPlugin) handleStatus(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleStatus(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	result := p.ssh.RunCommand("ufw status verbose")
@@ -260,7 +258,7 @@ func (p *FirewallPlugin) handleStatus(ctx context.Context, conn ssh.Connection, 
 	return nil
 }
 
-func (p *FirewallPlugin) handleEnable(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleEnable(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	result := p.ssh.RunCommand("ufw --force enable")
@@ -272,7 +270,7 @@ func (p *FirewallPlugin) handleEnable(ctx context.Context, conn ssh.Connection, 
 	return nil
 }
 
-func (p *FirewallPlugin) handleDisable(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *FirewallPlugin) handleDisable(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	p.ssh = conn
 
 	result := p.ssh.RunCommand("ufw disable")
