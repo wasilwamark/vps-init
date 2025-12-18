@@ -122,7 +122,6 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn plugin.Connection, 
 	}
 	domain := args[0]
 	pass := getSudoPass(flags)
-	var result *plugin.Result
 
 	// Interactive Wizard
 	fmt.Println("🚀 Standard WordPress Deployment Wizard")
@@ -195,14 +194,14 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn plugin.Connection, 
 
 	// 3. Download WordPress
 	fmt.Println("⬇️  Downloading WordPress...")
-	result = conn.RunSudo(fmt.Sprintf("wp core download --path=%s --allow-root", webRoot), pass); if !result.Success {
+	if result := conn.RunSudo(fmt.Sprintf("wp core download --path=%s --allow-root", webRoot), pass); !result.Success {
 		return fmt.Errorf("wp download failed: %s", result.Stderr)
 	}
 
 	// 4. Create Config
 	fmt.Println("⚙️  Configuring wp-config.php...")
 	confCmd := fmt.Sprintf("wp config create --dbname=%s --dbuser=%s --dbpass='%s' --path=%s --allow-root", dbName, dbUser, dbPass, webRoot)
-	result = conn.RunSudo(confCmd, pass); if !result.Success {
+	if result := conn.RunSudo(confCmd, pass); !result.Success {
 		return fmt.Errorf("wp config failed: %s", result.Stderr)
 	}
 
@@ -210,7 +209,7 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn plugin.Connection, 
 	fmt.Println("💿 Installing WordPress Core...")
 	instCmd := fmt.Sprintf("wp core install --url=http://%s --title='%s' --admin_user=%s --admin_password='%s' --admin_email=%s --path=%s --allow-root",
 		domain, domain, adminUser, adminPass, adminEmail, webRoot)
-	result = conn.RunSudo(instCmd, pass); if !result.Success {
+	if result := conn.RunSudo(instCmd, pass); !result.Success {
 		return fmt.Errorf("wp install failed: %s", result.Stderr)
 	}
 
@@ -261,7 +260,7 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn plugin.Connection, 
 	conn.RunSudo(fmt.Sprintf("ln -sf /etc/nginx/sites-available/%s /etc/nginx/sites-enabled/%s", domain, domain), pass)
 
 	// Test & Reload Nginx
-	result = conn.RunSudo("nginx -t", pass); if !result.Success {
+	if result := conn.RunSudo("nginx -t", pass); !result.Success {
 		// Rollback symlink
 		conn.RunSudo(fmt.Sprintf("rm /etc/nginx/sites-enabled/%s", domain), pass)
 		return fmt.Errorf("nginx config failed: %s", result.Stderr)

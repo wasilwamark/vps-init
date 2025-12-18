@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -391,4 +390,55 @@ func (r *Registry) Remove(name string) bool {
 // Clear removes all plugins
 func (r *Registry) Clear() {
 	r.plugins = make(map[string]Plugin)
+}
+
+// LoadPlugin loads a plugin by name using the loader and registers it
+func (r *Registry) LoadPlugin(name string) error {
+	if r.loader == nil {
+		return fmt.Errorf("no plugin loader configured")
+	}
+
+	plugin, err := r.loader.LoadPlugin(name)
+	if err != nil {
+		return err
+	}
+
+	r.Register(plugin)
+	return nil
+}
+
+// LoadAll loads all available plugins using the loader
+func (r *Registry) LoadAll() error {
+	if r.loader == nil {
+		return fmt.Errorf("no plugin loader configured")
+	}
+
+	plugins, err := r.loader.LoadPlugins()
+	if err != nil {
+		return err
+	}
+
+	for _, plugin := range plugins {
+		r.Register(plugin)
+	}
+
+	return nil
+}
+
+// GetRootCommands returns all root commands from registered plugins
+func (r *Registry) GetRootCommands() []*cobra.Command {
+	var commands []*cobra.Command
+
+	for _, plugin := range r.plugins {
+		if cmd := plugin.GetRootCommand(); cmd != nil {
+			commands = append(commands, cmd)
+		}
+	}
+
+	return commands
+}
+
+// WithHideOutput returns true to indicate output should be hidden
+func WithHideOutput() bool {
+	return true
 }

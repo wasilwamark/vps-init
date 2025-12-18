@@ -44,7 +44,43 @@ func (p *Plugin) Stop(ctx context.Context) error {
 
 
 func (p *Plugin) GetRootCommand() *cobra.Command {
-	return nil // No top-level command, just subcommands
+	cmd := &cobra.Command{
+		Use:   "nginx",
+		Short: "Manage Nginx web server",
+		Long:  "Manage Nginx web server (install, config, ssl).",
+	}
+
+	// Add all commands for consistent help display
+	commands := []struct {
+		name        string
+		description string
+	}{
+		{"install", "Install Nginx"},
+		{"status", "Check Nginx status"},
+		{"start", "Start Nginx"},
+		{"stop", "Stop Nginx"},
+		{"restart", "Restart Nginx"},
+		{"reload", "Reload Nginx configuration"},
+		{"logs", "Stream Nginx logs [access|error|both]"},
+		{"list-sites", "List all configured sites"},
+		{"add-site", "Add a new site (reverse proxy)"},
+		{"remove-site", "Remove a site configuration"},
+		{"install-ssl", "Install SSL certificate using Certbot"},
+	}
+
+	for _, command := range commands {
+		subCmd := &cobra.Command{
+			Use:   command.name,
+			Short: command.description,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				fmt.Printf("To run on a server, use: vps-init user@host nginx %s\n", cmd.Name())
+				return nil
+			},
+		}
+		cmd.AddCommand(subCmd)
+	}
+
+	return cmd
 }
 	// Enhanced plugin interface methods
 func (p *Plugin) Validate() error {
@@ -169,18 +205,17 @@ func (p *Plugin) statusHandler(ctx context.Context, conn plugin.Connection, args
 func (p *Plugin) serviceActionHandler(action string) plugin.CommandHandler {
 	return func(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 		pass := getSudoPass(flags)
-		var result *plugin.Result
 
 		// For reload, always test config first
 		if action == "reload" {
 			fmt.Println("🔍 Testing Nginx configuration...")
-			result = conn.RunSudo("nginx -t", pass); if !result.Success {
+			if result := conn.RunSudo("nginx -t", pass); !result.Success {
 				return fmt.Errorf("nginx config test failed:\n%s", result.Stderr)
 			}
 		}
 
 		fmt.Printf("⚙️  Running: systemctl %s nginx...\n", action)
-		if result = conn.RunSudo(fmt.Sprintf("systemctl %s nginx", action), pass); !result.Success {
+		if result := conn.RunSudo(fmt.Sprintf("systemctl %s nginx", action), pass); !result.Success {
 			return fmt.Errorf("failed to %s nginx: %s", action, result.Stderr)
 		}
 		fmt.Printf("✅ Nginx %sed successfully\n", action)

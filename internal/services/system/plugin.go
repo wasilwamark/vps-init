@@ -126,18 +126,31 @@ func (p *Plugin) GetRootCommand() *cobra.Command {
 		Long:  "Manage system updates and packages.",
 	}
 
-	updateCmd := &cobra.Command{
-		Use:   "update",
-		Short: "Update package lists (apt update)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("To run on a server, use: vps-init user@host system update")
-			return nil
-		},
+	// Add all commands for consistent help display
+	commands := []struct {
+		name        string
+		description string
+	}{
+		{"update", "Update package lists (apt update)"},
+		{"upgrade", "Upgrade installed packages (apt upgrade)"},
+		{"full-upgrade", "Perform full system upgrade (apt dist-upgrade)"},
+		{"autoremove", "Remove unused packages"},
+		{"shell", "Open interactive shell on server"},
+		{"install", "Install packages (apt install)"},
+		{"uninstall", "Uninstall packages (apt remove)"},
 	}
-	cmd.AddCommand(updateCmd)
 
-	// Ideally we should add other commands too for consistency in help
-	// ...
+	for _, command := range commands {
+		subCmd := &cobra.Command{
+			Use:   command.name,
+			Short: command.description,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				fmt.Printf("To run on a server, use: vps-init user@host system %s\n", cmd.Name())
+				return nil
+			},
+		}
+		cmd.AddCommand(subCmd)
+	}
 
 	return cmd
 }
@@ -155,7 +168,7 @@ func (p *Plugin) Stop(ctx context.Context) error {
 // Command Handlers
 
 // Helper for sudo errors
-func (p *Plugin) checkSudoResult(result *plugin.Result, flags map[string]interface{}) error {
+func (p *Plugin) checkSudoResult(result plugin.Result, flags map[string]interface{}) error {
 	if result.Success {
 		return nil
 	}

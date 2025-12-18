@@ -171,9 +171,17 @@ func executeDirectCommand() {
 	host := parts[1]
 
 	ctx := context.Background()
-	conn := ssh.New(host, user)
-	// vps_ssh.New does not return error, it just creates the struct
-	defer conn.Disconnect()
+	config := ssh.Config{
+		Host: host,
+		User: user,
+		Port: 22,
+	}
+	conn, err := ssh.Connect(config)
+	if err != nil {
+		fmt.Printf("❌ Failed to establish SSH connection: %v\n", err)
+		return
+	}
+	defer conn.Close()
 
 	if !conn.Connect() {
 		fmt.Printf("❌ Failed to establish SSH connection manually (Connect returned false)\n")
