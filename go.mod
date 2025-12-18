@@ -1,12 +1,10 @@
 module github.com/wasilwamark/vps-init
 
-go 1.21
+go 1.23
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/spf13/cobra v1.10.2
-	github.com/wasilwamark/vps-init-core v0.1.1
-	github.com/wasilwamark/vps-init-ssh v0.0.2
 	gopkg.in/yaml.v2 v2.2.2
 )
 
