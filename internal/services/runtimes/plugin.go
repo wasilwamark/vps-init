@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -134,7 +134,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 	}
 }
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: runtime install <language> <version> [options]\n\nExample: runtime install node 18\nExample: runtime install python 3.11\nExample: runtime install go 1.21")
 	}
@@ -166,33 +166,33 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	}
 }
 
-func (p *Plugin) installNode(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installNode(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Node.js %s...\n", version)
 
 	// Check if nvm exists
-	if result := conn.RunCommand("command -v nvm", ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand("command -v nvm", core.WithHideOutput()); !result.Success {
 		fmt.Println("🔧 Installing NVM (Node Version Manager)...")
 		installCmd := `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash`
-		if result := conn.RunCommand(installCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(installCmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("failed to install NVM: %s", result.Stderr)
 		}
 
 		// Add NVM to shell profile
 		profileCmd := `echo 'export NVM_DIR="$HOME/.nvm"' >> ~/.bashrc && echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> ~/.bashrc && echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> ~/.bashrc`
-		if result := conn.RunCommand(profileCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(profileCmd, core.WithHideOutput()); !result.Success {
 			fmt.Printf("⚠️  Failed to update bashrc: %s\n", result.Stderr)
 		}
 	}
 
 	// Install Node.js using nvm
 	installCmd := fmt.Sprintf(`bash -c 'source ~/.nvm/nvm.sh && nvm install %s && nvm use %s && nvm alias default %s'`, version, version, version)
-	if result := conn.RunCommand(installCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(installCmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to install Node.js %s: %s", version, result.Stderr)
 	}
 
 	// Verify installation
 	verifyCmd := fmt.Sprintf(`bash -c 'source ~/.nvm/nvm.sh && node --version && npm --version'`)
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify Node.js installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ Node.js %s installed successfully!\n", version)
@@ -202,11 +202,11 @@ func (p *Plugin) installNode(ctx context.Context, conn ssh.Connection, version s
 	return nil
 }
 
-func (p *Plugin) installPython(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installPython(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Python %s...\n", version)
 
 	// Install uv if not exists
-	if result := conn.RunCommand("command -v uv", ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand("command -v uv", core.WithHideOutput()); !result.Success {
 		fmt.Println("🔧 Installing uv...")
 		installDeps := `apt-get update 2>/dev/null || true && apt-get install -y curl`
 		result = conn.RunSudo(installDeps, pass); if !result.Success {
@@ -214,36 +214,36 @@ func (p *Plugin) installPython(ctx context.Context, conn ssh.Connection, version
 		}
 
 		installCmd := `curl -LsSf https://astral.sh/uv/install.sh | sh`
-		if result := conn.RunCommand(installCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(installCmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("failed to install uv: %s", result.Stderr)
 		}
 
 		// Add uv to PATH (uv installs to ~/.local/bin)
 		profileCmd := `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc`
-		if result := conn.RunCommand(profileCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(profileCmd, core.WithHideOutput()); !result.Success {
 			fmt.Printf("⚠️  Failed to update bashrc: %s\n", result.Stderr)
 		}
 
 		// Export PATH for current session
 		exportCmd := `export PATH="$HOME/.local/bin:$PATH"`
-		conn.RunCommand(exportCmd, ssh.WithHideOutput())
+		conn.RunCommand(exportCmd, core.WithHideOutput())
 	}
 
 	// Install Python version using uv
 	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python install %s'`, version)
-	if result := conn.RunCommand(installCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(installCmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to install Python %s: %s", version, result.Stderr)
 	}
 
 	// Set the Python version as default
 	pinCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python pin %s'`, version)
-	if result := conn.RunCommand(pinCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(pinCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to pin Python %s: %s\n", version, result.Stderr)
 	}
 
 	// Verify installation
 	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv run python --version && uv run pip --version'`)
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify Python installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ Python %s installed successfully!\n", version)
@@ -253,7 +253,7 @@ func (p *Plugin) installPython(ctx context.Context, conn ssh.Connection, version
 	return nil
 }
 
-func (p *Plugin) installGo(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installGo(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Go %s...\n", version)
 
 	// Format version string for Go download URLs
@@ -266,7 +266,7 @@ func (p *Plugin) installGo(ctx context.Context, conn ssh.Connection, version str
 
 	// Download and install Go
 	downloadCmd := fmt.Sprintf(`wget https://go.dev/dl/go%s.linux-amd64.tar.gz -O /tmp/go%s.linux-amd64.tar.gz`, goVersion, goVersion)
-	if result := conn.RunCommand(downloadCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(downloadCmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to download Go: %s", result.Stderr)
 	}
 
@@ -278,17 +278,17 @@ func (p *Plugin) installGo(ctx context.Context, conn ssh.Connection, version str
 
 	// Remove the tar file
 	cleanupCmd := fmt.Sprintf(`rm /tmp/go%s.linux-amd64.tar.gz`, goVersion)
-	conn.RunCommand(cleanupCmd, ssh.WithHideOutput())
+	conn.RunCommand(cleanupCmd, core.WithHideOutput())
 
 	// Add Go to PATH
 	profileCmd := `echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && echo 'export GOPATH=$HOME/go' >> ~/.bashrc && echo 'export PATH=$PATH:$GOPATH/bin' >> ~/.bashrc`
-	if result := conn.RunCommand(profileCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(profileCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to update bashrc: %s\n", result.Stderr)
 	}
 
 	// Verify installation
 	verifyCmd := `/usr/local/go/bin/go version`
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify Go installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ Go %s installed successfully!\n", version)
@@ -299,7 +299,7 @@ func (p *Plugin) installGo(ctx context.Context, conn ssh.Connection, version str
 	return nil
 }
 
-func (p *Plugin) installJava(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installJava(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Java %s...\n", version)
 
 	// Install OpenJDK
@@ -323,13 +323,13 @@ func (p *Plugin) installJava(ctx context.Context, conn ssh.Connection, version s
 
 	// Set JAVA_HOME
 	homeCmd := `echo 'export JAVA_HOME=/usr/lib/jvm/java-'$(ls /usr/lib/jvm | grep openjdk | head -n 1 | cut -d'-' -f2)'-openjdk-amd64' >> ~/.bashrc`
-	if result := conn.RunCommand(homeCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(homeCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to set JAVA_HOME: %s\n", result.Stderr)
 	}
 
 	// Verify installation
 	verifyCmd := `bash -c 'source ~/.bashrc && java -version && javac -version'`
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify Java installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ Java %s installed successfully!\n", version)
@@ -339,28 +339,28 @@ func (p *Plugin) installJava(ctx context.Context, conn ssh.Connection, version s
 	return nil
 }
 
-func (p *Plugin) installRust(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installRust(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Rust %s...\n", version)
 
 	// Install Rust using rustup
 	installCmd := `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`
-	if result := conn.RunCommand(installCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(installCmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to install Rust: %s", result.Stderr)
 	}
 
 	// Add cargo to PATH
 	profileCmd := `echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc`
-	if result := conn.RunCommand(profileCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(profileCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to update bashrc: %s\n", result.Stderr)
 	}
 
 	// Export PATH for current session
 	exportCmd := `export PATH="$HOME/.cargo/bin:$PATH"`
-	conn.RunCommand(exportCmd, ssh.WithHideOutput())
+	conn.RunCommand(exportCmd, core.WithHideOutput())
 
 	// Verify installation
 	verifyCmd := `bash -c 'export PATH="$HOME/.cargo/bin:$PATH" && rustc --version && cargo --version'`
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify Rust installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ Rust installed successfully!\n")
@@ -370,7 +370,7 @@ func (p *Plugin) installRust(ctx context.Context, conn ssh.Connection, version s
 	return nil
 }
 
-func (p *Plugin) installPHP(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installPHP(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing PHP %s...\n", version)
 
 	// Add PPA for newer PHP versions, but handle gracefully if it fails
@@ -401,10 +401,10 @@ func (p *Plugin) installPHP(ctx context.Context, conn ssh.Connection, version st
 
 	// Verify installation
 	verifyCmd := fmt.Sprintf("php%s --version", version)
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		// Fallback to generic php command if version-specific fails
 		verifyCmd = "php --version"
-		if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 			fmt.Printf("⚠️  Failed to verify PHP installation: %s\n", result.Stderr)
 		} else {
 			fmt.Printf("✅ PHP installed successfully!\n")
@@ -418,7 +418,7 @@ func (p *Plugin) installPHP(ctx context.Context, conn ssh.Connection, version st
 	return nil
 }
 
-func (p *Plugin) installRuby(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installRuby(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing Ruby %s...\n", version)
 
 	// Format Ruby version for rbenv
@@ -438,28 +438,28 @@ func (p *Plugin) installRuby(ctx context.Context, conn ssh.Connection, version s
 	}
 
 	// Install rbenv (check if already installed first)
-	if result := conn.RunCommand("test -d ~/.rbenv", ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand("test -d ~/.rbenv", core.WithHideOutput()); !result.Success {
 		rbenvCmd := `git clone https://github.com/rbenv/rbenv.git ~/.rbenv && git clone https://github.com/rbenv/ruby-build.git ~/.rbenv/plugins/ruby-build`
-		if result := conn.RunCommand(rbenvCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(rbenvCmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("failed to install rbenv: %s", result.Stderr)
 		}
 	}
 
 	// Add rbenv to PATH
 	profileCmd := `echo 'export PATH="$HOME/.rbenv/bin:$PATH"' >> ~/.bashrc && echo 'eval "$(rbenv init -)"' >> ~/.bashrc`
-	if result := conn.RunCommand(profileCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(profileCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to update bashrc: %s\n", result.Stderr)
 	}
 
 	// Install Ruby version
 	installCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv install %s --skip-existing && rbenv global %s'`, rubyVersion, rubyVersion)
-	if result := conn.RunCommand(installCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(installCmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to install Ruby %s: %s", version, result.Stderr)
 	}
 
 	// Verify installation
 	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && ruby --version && gem --version'`)
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify Ruby installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ Ruby %s installed successfully!\n", rubyVersion)
@@ -469,12 +469,12 @@ func (p *Plugin) installRuby(ctx context.Context, conn ssh.Connection, version s
 	return nil
 }
 
-func (p *Plugin) installDotNet(ctx context.Context, conn ssh.Connection, version string, pass string) error {
+func (p *Plugin) installDotNet(ctx context.Context, conn core.Connection, version string, pass string) error {
 	fmt.Printf("📦 Installing .NET %s...\n", version)
 
 	// Detect Ubuntu version
 	ubuntuVersion := "20.04"
-	if result := conn.RunCommand(`lsb_release -rs | cut -d. -f1`, ssh.WithHideOutput()); result.Success {
+	if result := conn.RunCommand(`lsb_release -rs | cut -d. -f1`, core.WithHideOutput()); result.Success {
 		ver := strings.TrimSpace(result.Stdout)
 		if ver == "22" || ver == "24" {
 			ubuntuVersion = ver + ".04"
@@ -499,7 +499,7 @@ func (p *Plugin) installDotNet(ctx context.Context, conn ssh.Connection, version
 
 	// Verify installation
 	verifyCmd := fmt.Sprintf("dotnet --version")
-	if result := conn.RunCommand(verifyCmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(verifyCmd, core.WithHideOutput()); !result.Success {
 		fmt.Printf("⚠️  Failed to verify .NET installation: %s\n", result.Stderr)
 	} else {
 		fmt.Printf("✅ .NET %s installed successfully!\n", version)
@@ -509,7 +509,7 @@ func (p *Plugin) installDotNet(ctx context.Context, conn ssh.Connection, version
 	return nil
 }
 
-func (p *Plugin) listHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) listHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("📋 Available Runtimes:")
 	fmt.Println()
 
@@ -530,7 +530,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn ssh.Connection, args []st
 
 	for _, rt := range runtimes {
 		fmt.Printf("=== %s ===\n", rt.name)
-		if result := conn.RunCommand(rt.cmd, ssh.WithHideOutput()); result.Success {
+		if result := conn.RunCommand(rt.cmd, core.WithHideOutput()); result.Success {
 			if rt.name == "Node.js" && result.Stdout == "" {
 				fmt.Println("  NVM not installed or no Node.js versions found")
 			} else if rt.name == "Python" && result.Stdout == "" {
@@ -549,7 +549,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn ssh.Connection, args []st
 			fmt.Printf("  Not installed or not in PATH\n")
 		}
 		if rt.extra != "" {
-			if result := conn.RunCommand(rt.extra, ssh.WithHideOutput()); result.Success && strings.TrimSpace(result.Stdout) != "" {
+			if result := conn.RunCommand(rt.extra, core.WithHideOutput()); result.Success && strings.TrimSpace(result.Stdout) != "" {
 				for _, line := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
 					fmt.Printf("  %s\n", line)
 				}
@@ -561,7 +561,7 @@ func (p *Plugin) listHandler(ctx context.Context, conn ssh.Connection, args []st
 	return nil
 }
 
-func (p *Plugin) useHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) useHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: runtime use <language> <version>")
 	}
@@ -585,16 +585,16 @@ func (p *Plugin) useHandler(ctx context.Context, conn ssh.Connection, args []str
 	}
 }
 
-func (p *Plugin) useNode(ctx context.Context, conn ssh.Connection, version string) error {
+func (p *Plugin) useNode(ctx context.Context, conn core.Connection, version string) error {
 	fmt.Printf("🔄 Switching to Node.js %s...\n", version)
 
 	cmd := fmt.Sprintf(`bash -c 'source ~/.nvm/nvm.sh && nvm use %s && nvm alias default %s'`, version, version)
-	if result := conn.RunCommand(cmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(cmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to switch Node.js version: %s", result.Stderr)
 	}
 
 	verifyCmd := fmt.Sprintf(`bash -c 'source ~/.nvm/nvm.sh && node --version'`)
-		result := conn.RunCommand(verifyCmd, ssh.WithHideOutput())
+		result := conn.RunCommand(verifyCmd, core.WithHideOutput())
 	if !result.Success {
 		return fmt.Errorf("failed to verify Node.js version: %s", result.Stderr)
 	}
@@ -603,16 +603,16 @@ func (p *Plugin) useNode(ctx context.Context, conn ssh.Connection, version strin
 	return nil
 }
 
-func (p *Plugin) usePython(ctx context.Context, conn ssh.Connection, version string) error {
+func (p *Plugin) usePython(ctx context.Context, conn core.Connection, version string) error {
 	fmt.Printf("🔄 Switching to Python %s...\n", version)
 
 	cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python pin %s'`, version)
-	if result := conn.RunCommand(cmd, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(cmd, core.WithHideOutput()); !result.Success {
 		return fmt.Errorf("failed to switch Python version: %s", result.Stderr)
 	}
 
 	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv run python --version'`)
-		result := conn.RunCommand(verifyCmd, ssh.WithHideOutput())
+		result := conn.RunCommand(verifyCmd, core.WithHideOutput())
 	if !result.Success {
 		return fmt.Errorf("failed to verify Python version: %s", result.Stderr)
 	}
@@ -621,7 +621,7 @@ func (p *Plugin) usePython(ctx context.Context, conn ssh.Connection, version str
 	return nil
 }
 
-func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) removeHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: runtime remove <language> <version>")
 	}
@@ -633,14 +633,14 @@ func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []
 	switch language {
 	case "node", "nodejs", "node.js":
 		cmd := fmt.Sprintf(`bash -c 'source ~/.nvm/nvm.sh && nvm uninstall %s'`, version)
-		if result := conn.RunCommand(cmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(cmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("failed to uninstall Node.js %s: %s", version, result.Stderr)
 		}
 		fmt.Printf("✅ Node.js %s uninstalled\n", version)
 
 	case "python", "py", "python3":
 		cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv python uninstall %s'`, version)
-		if result := conn.RunCommand(cmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(cmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("failed to uninstall Python %s: %s", version, result.Stderr)
 		}
 		fmt.Printf("✅ Python %s uninstalled\n", version)
@@ -648,7 +648,7 @@ func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []
 	case "go", "golang":
 		// Check if Go is installed in /usr/local/go
 		checkCmd := fmt.Sprintf(`/usr/local/go/bin/go version | grep 'go%s'`, version)
-		if result := conn.RunCommand(checkCmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(checkCmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("Go %s not found in /usr/local/go", version)
 		}
 
@@ -660,14 +660,14 @@ func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []
 
 		// Remove PATH entries from bashrc
 		cleanupCmd := `sed -i '/export PATH=\$PATH:\/usr\/local\/go\/bin/d' ~/.bashrc && sed -i '/export GOPATH=\$HOME\/go/d' ~/.bashrc && sed -i '/export PATH=\$PATH:\$GOPATH\/bin/d' ~/.bashrc`
-		conn.RunCommand(cleanupCmd, ssh.WithHideOutput())
+		conn.RunCommand(cleanupCmd, core.WithHideOutput())
 
 		fmt.Printf("✅ Go %s uninstalled\n", version)
 
 	case "java", "jdk":
 		// Find Java installation
 		findCmd := fmt.Sprintf(`ls /usr/lib/jvm/ | grep -E 'java-%s-openjdk' | head -n 1`, version)
-		result := conn.RunCommand(findCmd, ssh.WithHideOutput())
+		result := conn.RunCommand(findCmd, core.WithHideOutput())
 		if !result.Success || strings.TrimSpace(result.Stdout) == "" {
 			return fmt.Errorf("Java %s not found in /usr/lib/jvm", version)
 		}
@@ -682,24 +682,24 @@ func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []
 
 		// Remove JAVA_HOME from bashrc
 		cleanupCmd := `sed -i '/export JAVA_HOME/d' ~/.bashrc`
-		conn.RunCommand(cleanupCmd, ssh.WithHideOutput())
+		conn.RunCommand(cleanupCmd, core.WithHideOutput())
 
 		fmt.Printf("✅ Java %s uninstalled\n", version)
 
 	case "rust":
 		// Use rustup to uninstall
 		cmd := fmt.Sprintf(`bash -c 'source ~/.bashrc && rustup self uninstall -y'`)
-		if result := conn.RunCommand(cmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(cmd, core.WithHideOutput()); !result.Success {
 			// Fallback: manually remove rust
 			removeCmd := `rm -rf ~/.cargo && rm -rf ~/.rustup`
-			if result := conn.RunCommand(removeCmd, ssh.WithHideOutput()); !result.Success {
+			if result := conn.RunCommand(removeCmd, core.WithHideOutput()); !result.Success {
 				return fmt.Errorf("failed to remove Rust: %s", result.Stderr)
 			}
 		}
 
 		// Remove PATH entries from bashrc
 		cleanupCmd := `sed -i '/export PATH="\$HOME\/\.cargo\/bin:\$PATH"/d' ~/.bashrc`
-		conn.RunCommand(cleanupCmd, ssh.WithHideOutput())
+		conn.RunCommand(cleanupCmd, core.WithHideOutput())
 
 		fmt.Printf("✅ Rust uninstalled\n")
 
@@ -715,7 +715,7 @@ func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []
 	case "ruby":
 		// Use rbenv to uninstall
 		cmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv uninstall %s'`, version)
-		if result := conn.RunCommand(cmd, ssh.WithHideOutput()); !result.Success {
+		if result := conn.RunCommand(cmd, core.WithHideOutput()); !result.Success {
 			return fmt.Errorf("failed to uninstall Ruby %s: %s", version, result.Stderr)
 		}
 
@@ -737,7 +737,7 @@ func (p *Plugin) removeHandler(ctx context.Context, conn ssh.Connection, args []
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔍 Current Runtime Status:")
 	fmt.Println()
 
@@ -757,7 +757,7 @@ func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []
 
 	for _, c := range commands {
 		fmt.Printf("=== %s ===\n", c.name)
-		if result := conn.RunCommand(c.cmd, ssh.WithHideOutput()); result.Success && strings.TrimSpace(result.Stdout) != "" {
+		if result := conn.RunCommand(c.cmd, core.WithHideOutput()); result.Success && strings.TrimSpace(result.Stdout) != "" {
 			for _, line := range strings.Split(strings.TrimSpace(result.Stdout), "\n") {
 				fmt.Printf("  %s\n", line)
 			}
@@ -770,30 +770,30 @@ func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []
 	return nil
 }
 
-func (p *Plugin) updateHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) updateHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔄 Updating runtime version managers...")
 
 	// Update nvm
 	fmt.Println("\n📦 Updating NVM...")
-	if result := conn.RunCommand(`bash -c 'source ~/.nvm/nvm.sh && nvm update-version'`, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(`bash -c 'source ~/.nvm/nvm.sh && nvm update-version'`, core.WithHideOutput()); !result.Success {
 		fmt.Println("  NVM update failed or not installed")
 	}
 
 	// Update uv
 	fmt.Println("\n📦 Updating uv...")
-	if result := conn.RunCommand(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv self update'`, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv self update'`, core.WithHideOutput()); !result.Success {
 		fmt.Println("  uv update failed or not installed")
 	}
 
 	// Update rbenv
 	fmt.Println("\n📦 Updating rbenv...")
-	if result := conn.RunCommand(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv update'`, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(`bash -c 'export PATH="$HOME/.rbenv/bin:$PATH" && eval "$(rbenv init -)" && rbenv update'`, core.WithHideOutput()); !result.Success {
 		fmt.Println("  rbenv update failed or not installed")
 	}
 
 	// Update rustup
 	fmt.Println("\n📦 Updating Rust...")
-	if result := conn.RunCommand(`bash -c 'rustup update'`, ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand(`bash -c 'rustup update'`, core.WithHideOutput()); !result.Success {
 		fmt.Println("  Rust update failed or not installed")
 	}
 

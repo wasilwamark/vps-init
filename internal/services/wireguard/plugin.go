@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -101,7 +101,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🛡️  Installing Wireguard & Tools...")
 	pass := getSudoPass(flags)
 
@@ -120,7 +120,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) setupHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) setupHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("⚙️  Setting up Wireguard Server...")
 	pass := getSudoPass(flags)
 
@@ -187,7 +187,7 @@ PrivateKey = %s
 	return nil
 }
 
-func (p *Plugin) addPeerHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) addPeerHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: add-peer <name> [--email=email@example.com] [--smtp-host=smtp.gmail.com:587] [--smtp-user=user] [--smtp-pass=password] [--smtp-from=from@example.com]")
 	}
@@ -231,7 +231,7 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn ssh.Connection, args [
 	}
 
 	// Derive public from private because getting it from wg show might require it running
-	sPubRes := conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", sPriv), ssh.WithHideOutput())
+	sPubRes := conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", sPriv), core.WithHideOutput())
 	if !sPubRes.Success {
 		return fmt.Errorf("failed to derive server public key: %s", sPubRes.Stderr)
 	}
@@ -253,7 +253,7 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn ssh.Connection, args [
 	// Get Server Endpoint (Public IP)
 	// Try to guess or use host
 	// Try to get the public IP from the server
-	result = conn.RunCommand("curl -s ifconfig.me || curl -s ipinfo.io/ip || echo 'YOUR_SERVER_IP'", ssh.WithHideOutput())
+	result = conn.RunCommand("curl -s ifconfig.me || curl -s ipinfo.io/ip || echo 'YOUR_SERVER_IP'", core.WithHideOutput())
 	endpoint := fmt.Sprintf("%s:51820", strings.TrimSpace(result.Stdout))
 	if result.Stdout == "" || strings.Contains(result.Stdout, "YOUR_SERVER_IP") {
 		fmt.Println("⚠️  Could not auto-detect server IP. Please manually set the Endpoint in the client config.")
@@ -400,7 +400,7 @@ PersistentKeepalive = 25
 	return nil
 }
 
-func (p *Plugin) removePeerHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) removePeerHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
 	// Get the config file to list peers
@@ -603,14 +603,14 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn ssh.Connection, arg
 }
 
 
-func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔌 Wireguard Service Status:")
 	conn.RunInteractive("systemctl status wg-quick@wg0")
 	fmt.Println("\n📊 Interface Status:")
 	return conn.RunInteractive("sudo wg show")
 }
 
-func (p *Plugin) listPeersHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) listPeersHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
 	fmt.Println("🔌 WireGuard Peers Overview")
@@ -807,7 +807,7 @@ func (p *Plugin) listPeersHandler(ctx context.Context, conn ssh.Connection, args
 	return nil
 }
 
-func (p *Plugin) restartHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) restartHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔄 Restarting Wireguard service...")
 	pass := getSudoPass(flags)
 
@@ -823,15 +823,15 @@ func (p *Plugin) restartHandler(ctx context.Context, conn ssh.Connection, args [
 
 // Helpers
 
-func generateKeys(conn ssh.Connection) (string, string, error) {
+func generateKeys(conn core.Connection) (string, string, error) {
 	// Returns private, public
-	result := conn.RunCommand("wg genkey", ssh.WithHideOutput())
+	result := conn.RunCommand("wg genkey", core.WithHideOutput())
 	if !result.Success {
 		return "", "", fmt.Errorf("failed to gen key: %s", result.Stderr)
 	}
 	priv := strings.TrimSpace(result.Stdout)
 
-	result = conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", priv), ssh.WithHideOutput())
+	result = conn.RunCommand(fmt.Sprintf("echo '%s' | wg pubkey", priv), core.WithHideOutput())
 	if !result.Success {
 		return "", "", fmt.Errorf("failed to gen pub key")
 	}
@@ -839,16 +839,16 @@ func generateKeys(conn ssh.Connection) (string, string, error) {
 	return priv, pub, nil
 }
 
-func getMainInterface(conn ssh.Connection) string {
+func getMainInterface(conn core.Connection) string {
 	// Try to guess default interface
-	result := conn.RunCommand("ip route | grep default | awk '{print $5}'", ssh.WithHideOutput())
+	result := conn.RunCommand("ip route | grep default | awk '{print $5}'", core.WithHideOutput())
 	if result.Success {
 		return strings.TrimSpace(result.Stdout)
 	}
 	return "eth0" // Fallback
 }
 
-func (p *Plugin) sendEmailConfig(conn ssh.Connection, email, name, clientConfig, clientAddr, cPub, endpoint string, flags map[string]interface{}) error {
+func (p *Plugin) sendEmailConfig(conn core.Connection, email, name, clientConfig, clientAddr, cPub, endpoint string, flags map[string]interface{}) error {
 	// Get SMTP configuration from flags or use defaults
 	smtpHost := getSMTPFlag(flags, "smtp-host", "smtp.gmail.com:587")
 	smtpUser := getSMTPFlag(flags, "smtp-user", "")

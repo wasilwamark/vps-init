@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -108,7 +108,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 	}
 }
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🛡️  Installing Fail2Ban...")
 	pass := getSudoPass(flags)
 
@@ -133,11 +133,11 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	return conn.RunInteractive("sudo fail2ban-client status")
 }
 
-func (p *Plugin) bannedHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) bannedHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	jail := "sshd"
 	if len(args) > 0 {
 		jail = args[0]
@@ -151,7 +151,7 @@ func (p *Plugin) bannedHandler(ctx context.Context, conn ssh.Connection, args []
 	return conn.RunInteractive(cmd)
 }
 
-func (p *Plugin) unbanHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) unbanHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: unban <ip> [jail]")
 	}

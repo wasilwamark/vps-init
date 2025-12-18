@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -96,7 +96,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("💾 Installing Restic...")
 	pass := getSudoPass(flags)
 
@@ -114,7 +114,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) initHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) initHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("⚙️  Initializing Repository Configuration...")
 	pass := getSudoPass(flags)
 
@@ -189,7 +189,7 @@ export RESTIC_PASSWORD="%s"
 
 // Database Discovery Logic
 
-func (p *Plugin) backupDbHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) backupDbHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
 	// 1. Discover Database Instances (Host Services & Docker Containers)
@@ -285,7 +285,7 @@ func (p *Plugin) backupDbHandler(ctx context.Context, conn ssh.Connection, args 
 	return p.performBackup(conn, targetInfo, pass)
 }
 
-func (p *Plugin) performBackup(conn ssh.Connection, targetDB DatabaseInfo, sudoPass string) error {
+func (p *Plugin) performBackup(conn core.Connection, targetDB DatabaseInfo, sudoPass string) error {
 	fmt.Printf("📦 Streaming backup of %s (%s)...\n", targetDB.Name, targetDB.Engine)
 
 	var dumpCmd string
@@ -366,22 +366,22 @@ type DatabaseInfo struct {
 
 // Discovery Logic
 
-func discoverInstances(conn ssh.Connection, sudoPass string) ([]DatabaseInstance, error) {
+func discoverInstances(conn core.Connection, sudoPass string) ([]DatabaseInstance, error) {
 	var inst []DatabaseInstance
 
 	// 1. Host Services
-	if conn.RunCommand("which mysql", ssh.WithHideOutput()).Success {
+	if conn.RunCommand("which mysql", core.WithHideOutput()).Success {
 		inst = append(inst, DatabaseInstance{Engine: "mysql", Type: "host"})
 	}
-	if conn.RunCommand("which psql", ssh.WithHideOutput()).Success {
+	if conn.RunCommand("which psql", core.WithHideOutput()).Success {
 		inst = append(inst, DatabaseInstance{Engine: "postgres", Type: "host"})
 	}
-	if conn.RunCommand("which mongosh", ssh.WithHideOutput()).Success || conn.RunCommand("which mongo", ssh.WithHideOutput()).Success {
+	if conn.RunCommand("which mongosh", core.WithHideOutput()).Success || conn.RunCommand("which mongo", core.WithHideOutput()).Success {
 		inst = append(inst, DatabaseInstance{Engine: "mongo", Type: "host"})
 	}
 
 	// 2. Docker Services
-	if conn.RunCommand("which docker", ssh.WithHideOutput()).Success {
+	if conn.RunCommand("which docker", core.WithHideOutput()).Success {
 		result := conn.RunSudo("docker ps --format '{{.ID}}|{{.Names}}|{{.Image}}'", sudoPass)
 		if result.Success {
 			lines := strings.Split(strings.TrimSpace(result.Stdout), "\n")
@@ -408,7 +408,7 @@ func discoverInstances(conn ssh.Connection, sudoPass string) ([]DatabaseInstance
 	return inst, nil
 }
 
-func detectCredentials(conn ssh.Connection, inst DatabaseInstance, sudoPass string) (string, string) {
+func detectCredentials(conn core.Connection, inst DatabaseInstance, sudoPass string) (string, string) {
 	user := "root"
 	pass := ""
 
@@ -441,7 +441,7 @@ func detectCredentials(conn ssh.Connection, inst DatabaseInstance, sudoPass stri
 	return user, pass
 }
 
-func listDatabases(conn ssh.Connection, inst DatabaseInstance, user, pass, sudoPass string) ([]string, error) {
+func listDatabases(conn core.Connection, inst DatabaseInstance, user, pass, sudoPass string) ([]string, error) {
 	var dbs []string
 	var cmd string
 
@@ -519,7 +519,7 @@ func listDatabases(conn ssh.Connection, inst DatabaseInstance, user, pass, sudoP
 
 // Helpers
 
-func getDockerEnv(conn ssh.Connection, id, sudoPass string, keys []string) (string, error) {
+func getDockerEnv(conn core.Connection, id, sudoPass string, keys []string) (string, error) {
 	inspectCmd := fmt.Sprintf("docker inspect %s --format '{{range .Config.Env}}{{println .}}{{end}}'", id)
 	result := conn.RunSudo(inspectCmd, sudoPass)
 	if !result.Success {
@@ -545,7 +545,7 @@ func isSystemDB(name string) bool {
 	return false
 }
 
-func (p *Plugin) restoreDbHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) restoreDbHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	pass := getSudoPass(flags)
 
 	// 1. List Snapshots
@@ -726,12 +726,12 @@ func (p *Plugin) restoreDbHandler(ctx context.Context, conn ssh.Connection, args
 	return nil
 }
 
-func (p *Plugin) snapshotsHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) snapshotsHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	conn.RunInteractive("sudo bash -c 'source /etc/vps-init/restic.env && restic snapshots'")
 	return nil
 }
 
-func (p *Plugin) unlockHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) unlockHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	conn.RunInteractive("sudo bash -c 'source /etc/vps-init/restic.env && restic unlock'")
 	return nil
 }

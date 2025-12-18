@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -89,7 +89,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🗄️  Installing MariaDB Server...")
 	pass := getSudoPass(flags)
 
@@ -132,7 +132,7 @@ FLUSH PRIVILEGES;
 	return nil
 }
 
-func (p *Plugin) createDbHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) createDbHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: create-db <dbname>")
 	}
@@ -150,7 +150,7 @@ func (p *Plugin) createDbHandler(ctx context.Context, conn ssh.Connection, args 
 	return nil
 }
 
-func (p *Plugin) createUserHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) createUserHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: create-user <username> <password>")
 	}
@@ -170,7 +170,7 @@ func (p *Plugin) createUserHandler(ctx context.Context, conn ssh.Connection, arg
 	return nil
 }
 
-func (p *Plugin) grantHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) grantHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: grant <username> <dbname>")
 	}
@@ -189,7 +189,7 @@ func (p *Plugin) grantHandler(ctx context.Context, conn ssh.Connection, args []s
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	return conn.RunInteractive("systemctl status mariadb")
 }
 

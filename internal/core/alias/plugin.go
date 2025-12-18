@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/wasilwamark/vps-init/internal/config"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -163,7 +163,7 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 }
 
 // Command handlers
-func (p *Plugin) handleAdd(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleAdd(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 2 {
 		return fmt.Errorf("name and connection are required")
 	}
@@ -177,7 +177,7 @@ func (p *Plugin) handleAdd(ctx context.Context, conn ssh.Connection, args []stri
 	return nil
 }
 
-func (p *Plugin) handleList(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleList(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	cfg := config.New()
 	aliases := cfg.GetAliases()
 
@@ -193,7 +193,7 @@ func (p *Plugin) handleList(ctx context.Context, conn ssh.Connection, args []str
 	return nil
 }
 
-func (p *Plugin) handleRemove(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleRemove(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("alias name is required")
 	}

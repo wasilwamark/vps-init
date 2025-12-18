@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -312,7 +312,7 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 }
 
 // Command handlers
-func (p *Plugin) handleList(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleList(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	plugins := p.registry.GetAll()
 
 	if len(plugins) == 0 {
@@ -328,7 +328,7 @@ func (p *Plugin) handleList(ctx context.Context, conn ssh.Connection, args []str
 	return nil
 }
 
-func (p *Plugin) handleLoad(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleLoad(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("plugin name is required")
 	}
@@ -343,7 +343,7 @@ func (p *Plugin) handleLoad(ctx context.Context, conn ssh.Connection, args []str
 	return nil
 }
 
-func (p *Plugin) handleInfo(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleInfo(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("plugin name is required")
 	}
@@ -385,7 +385,7 @@ func (p *Plugin) handleInfo(ctx context.Context, conn ssh.Connection, args []str
 	return nil
 }
 
-func (p *Plugin) handleReload(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleReload(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔄 Reloading plugins...")
 
 	// TODO: Implement plugin reload logic
@@ -471,7 +471,7 @@ func (p *Plugin) runReload(cmd *cobra.Command, args []string) {
 }
 
 // New command handlers
-func (p *Plugin) handleInstall(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleInstall(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("repository URL is required")
 	}
@@ -541,7 +541,7 @@ func (p *Plugin) handleInstall(ctx context.Context, conn ssh.Connection, args []
 	return nil
 }
 
-func (p *Plugin) handleUpdate(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleUpdate(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	updateAll := false
 	if flag, ok := flags["all"].(bool); ok {
 		updateAll = flag
@@ -563,7 +563,7 @@ func (p *Plugin) handleUpdate(ctx context.Context, conn ssh.Connection, args []s
 	return nil
 }
 
-func (p *Plugin) handleRemove(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleRemove(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("plugin name is required")
 	}
@@ -585,7 +585,7 @@ func (p *Plugin) handleRemove(ctx context.Context, conn ssh.Connection, args []s
 	return nil
 }
 
-func (p *Plugin) handleSearch(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleSearch(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("search query is required")
 	}
@@ -612,7 +612,7 @@ func (p *Plugin) handleSearch(ctx context.Context, conn ssh.Connection, args []s
 	return nil
 }
 
-func (p *Plugin) handleValidate(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) handleValidate(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if p.registry == nil {
 		p.registry = plugin.GetBuiltinRegistry()
 	}

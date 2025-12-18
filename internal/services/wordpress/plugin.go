@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -86,7 +86,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 
 // Handlers
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🐘 Installing PHP and Dependencies...")
 	pass := getSudoPass(flags)
 
@@ -106,7 +106,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	conn.RunSudo("mv wp-cli.phar /usr/local/bin/wp", pass)
 
 	// Verify
-	if result := conn.RunCommand("wp --info", ssh.WithHideOutput()); !result.Success {
+	if result := conn.RunCommand("wp --info", core.WithHideOutput()); !result.Success {
 		fmt.Printf("Warning: WP-CLI install verification failed: %s\n", result.Stderr)
 	} else {
 		fmt.Println("✅ WP-CLI installed.")
@@ -116,13 +116,13 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) createSiteHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) createSiteHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: create-site <domain>")
 	}
 	domain := args[0]
 	pass := getSudoPass(flags)
-	var result *ssh.Result
+	var result *core.Result
 
 	// Interactive Wizard
 	fmt.Println("🚀 Standard WordPress Deployment Wizard")
@@ -223,7 +223,7 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn ssh.Connection, arg
 	fmt.Println("🌐 Configuring Nginx...")
 	// We need to determine PHP socket path. Usually /run/php/php8.1-fpm.sock or similar.
 	// Let's try to find it.
-	sockRes := conn.RunCommand("find /run/php -name 'php*-fpm.sock' | head -n 1", ssh.WithHideOutput())
+	sockRes := conn.RunCommand("find /run/php -name 'php*-fpm.sock' | head -n 1", core.WithHideOutput())
 	phpSock := strings.TrimSpace(sockRes.Stdout)
 	if phpSock == "" {
 		phpSock = "unix:/var/run/php/php-fpm.sock" // fallback
@@ -258,7 +258,7 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn ssh.Connection, arg
 	}
 
 	conn.RunSudo(fmt.Sprintf("mv %s /etc/nginx/sites-available/%s", tmpNginx, domain), pass)
-	conn.RunSudo(fmt.Sprintf("ln -sf /etc/nginx/sites-available/%s /etc/nginx/sites-enabled/", domain, domain), pass)
+	conn.RunSudo(fmt.Sprintf("ln -sf /etc/nginx/sites-available/%s /etc/nginx/sites-enabled/%s", domain, domain), pass)
 
 	// Test & Reload Nginx
 	result = conn.RunSudo("nginx -t", pass); if !result.Success {

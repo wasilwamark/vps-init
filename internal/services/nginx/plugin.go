@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	core "github.com/wasilwamark/vps-init-core"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -145,7 +145,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 	}
 }
 
-func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🌐 Installing Nginx...")
 
 	// 1. Update apt
@@ -162,14 +162,14 @@ func (p *Plugin) installHandler(ctx context.Context, conn ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) statusHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) statusHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	return conn.RunInteractive("systemctl status nginx")
 }
 
 func (p *Plugin) serviceActionHandler(action string) plugin.CommandHandler {
-	return func(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+	return func(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 		pass := getSudoPass(flags)
-		var result *ssh.Result
+		var result *core.Result
 
 		// For reload, always test config first
 		if action == "reload" {
@@ -188,7 +188,7 @@ func (p *Plugin) serviceActionHandler(action string) plugin.CommandHandler {
 	}
 }
 
-func (p *Plugin) logsHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) logsHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("📜 Streaming Nginx logs (Ctrl+C to stop)...")
 
 	// Determine log type (access, error, or both)
@@ -211,7 +211,7 @@ func (p *Plugin) logsHandler(ctx context.Context, conn ssh.Connection, args []st
 	case "both":
 		fmt.Println("📊 Access logs & ❌ Error logs...")
 		// Use multitail to show both logs if available, otherwise use tail with both files
-		checkMultitail := conn.RunCommand("which multitail", ssh.WithHideOutput())
+		checkMultitail := conn.RunCommand("which multitail", core.WithHideOutput())
 		if checkMultitail.Success {
 			cmd = "sudo multitail /var/log/nginx/access.log /var/log/nginx/error.log"
 		} else {
@@ -225,11 +225,11 @@ func (p *Plugin) logsHandler(ctx context.Context, conn ssh.Connection, args []st
 	return conn.RunInteractive(cmd)
 }
 
-func (p *Plugin) listSitesHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) listSitesHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔍 Fetching configured sites...")
 
 	// List sites in sites-enabled
-	result := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", ssh.WithHideOutput())
+	result := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", core.WithHideOutput())
 	if !result.Success {
 		return fmt.Errorf("failed to list sites: %s", result.Stderr)
 	}
@@ -247,11 +247,11 @@ func (p *Plugin) listSitesHandler(ctx context.Context, conn ssh.Connection, args
 		}
 
 		// Check if it's a symlink (enabled) or regular file
-		checkRes := conn.RunCommand(fmt.Sprintf("test -L /etc/nginx/sites-enabled/%s && echo 'symlink' || echo 'file'", site), ssh.WithHideOutput())
+		checkRes := conn.RunCommand(fmt.Sprintf("test -L /etc/nginx/sites-enabled/%s && echo 'symlink' || echo 'file'", site), core.WithHideOutput())
 		linkType := strings.TrimSpace(checkRes.Stdout)
 
 		// Check if SSL is configured by looking for listen 443 in the config
-		sslRes := conn.RunCommand(fmt.Sprintf("grep -q 'listen.*443' /etc/nginx/sites-enabled/%s && echo 'yes' || echo 'no'", site), ssh.WithHideOutput())
+		sslRes := conn.RunCommand(fmt.Sprintf("grep -q 'listen.*443' /etc/nginx/sites-enabled/%s && echo 'yes' || echo 'no'", site), core.WithHideOutput())
 		hasSSL := strings.TrimSpace(sslRes.Stdout) == "yes"
 
 		status := "✅"
@@ -270,7 +270,7 @@ func (p *Plugin) listSitesHandler(ctx context.Context, conn ssh.Connection, args
 	return nil
 }
 
-func (p *Plugin) addSiteHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) addSiteHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: add-site <domain> [--proxy <port>] [--file <local-path>] [--ssl]")
 	}
@@ -370,7 +370,7 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn ssh.Connection, args [
 	return nil
 }
 
-func (p *Plugin) removeSiteHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) removeSiteHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: remove-site <domain>")
 	}
@@ -395,14 +395,14 @@ func (p *Plugin) removeSiteHandler(ctx context.Context, conn ssh.Connection, arg
 	return nil
 }
 
-func (p *Plugin) installSSLHandler(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error {
+func (p *Plugin) installSSLHandler(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error {
 	domain := ""
 	if len(args) > 0 {
 		domain = args[0]
 	} else {
 		// Interactive selection
 		fmt.Println("🔍 Fetching available sites...")
-		result := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", ssh.WithHideOutput())
+		result := conn.RunCommand("ls -1 /etc/nginx/sites-enabled/", core.WithHideOutput())
 		if !result.Success {
 			return fmt.Errorf("failed to list sites: %s", result.Stderr)
 		}

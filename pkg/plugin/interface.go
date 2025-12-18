@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/wasilwamark/vps-init-ssh"
+	"github.com/wasilwamark/vps-init-core"
 )
 
 // Plugin defines the interface that all plugins must implement
@@ -89,7 +89,7 @@ type Flag struct {
 }
 
 // CommandHandler handles command execution
-type CommandHandler func(ctx context.Context, conn ssh.Connection, args []string, flags map[string]interface{}) error
+type CommandHandler func(ctx context.Context, conn core.Connection, args []string, flags map[string]interface{}) error
 
 // PluginMetadata contains plugin metadata
 type PluginMetadata struct {
