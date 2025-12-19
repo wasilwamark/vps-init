@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VPS-Init is a Go-based CLI tool for server management that works directly over SSH. It features a modular plugin architecture for extensible functionality without requiring agents or configuration management systems.
+VPS-Init is a Go-based CLI tool for server management that works directly over SSH. It features a modular built-in plugin architecture for server management without requiring agents or configuration management systems.
 
 ## Build Commands
 
@@ -62,8 +62,8 @@ go build -o bin/vps-init ./cmd/vps-init
 # Test plugin loading
 go test ./pkg/plugin
 
-# Test git installer
-go test ./pkg/plugin/git_installer
+# Test plugin validation
+./bin/vps-init plugin validate
 ```
 
 ### SSH Connection Testing
@@ -91,11 +91,9 @@ go test ./pkg/plugin/git_installer
 #### **Plugin System (`pkg/plugin/`)**
 - `interface.go`: Core plugin interfaces and types
 - `builtin.go`: Built-in plugin registry
-- `loader.go`: Filesystem and dynamic plugin loading
+- `loader.go`: Built-in plugin loading
 - `validation.go`: Plugin validation system
-- `git_installer.go`: Git-based plugin installation
-- `git_provider.go`: Git VCS operations
-- `compatibility.go`: Version compatibility checking
+- `compatibility.go`: Version and platform compatibility checking
 
 #### **SSH Layer (`internal/ssh/`)**
 - `ssh.go`: SSH connection management with sudo support
@@ -154,21 +152,8 @@ type Plugin interface {
 ```
 internal/services/myplugin/
 ├── plugin.go          # Main plugin implementation
-└── plugin.yaml        # Plugin metadata (optional)
 ```
 
-#### **Git-based Plugin Installation**
-
-```bash
-# Install from GitHub
-./bin/vps-init plugin install github.com/user/my-plugin
-
-# Install specific version
-./bin/vps-init plugin install github.com/user/my-plugin@v1.0.0
-
-# Install from branch
-./bin/vps-init plugin install github.com/user/my-plugin --branch main
-```
 
 ## Key Design Patterns
 
@@ -179,9 +164,9 @@ internal/services/myplugin/
 
 ### **Plugin Architecture**
 - **Interface-based**: All plugins implement standardized interface
+- **Built-in only**: All plugins are compiled-in, no external plugins
 - **Dependency management**: Plugins declare version constraints
-- **Validation system**: Comprehensive plugin validation
-- **Loading mechanisms**: Built-in, filesystem, and git-based loading
+- **Validation system**: Comprehensive plugin validation and compatibility checking
 
 ### **Command Execution**
 - Plugin commands execute over SSH with context and flags
@@ -203,11 +188,6 @@ Plugins are registered in `cmd/vps-init/plugins_init.go`:
 plugin.RegisterBuiltin("github.com/wasilwps-init/services/nginx", &nginx.Plugin{})
 ```
 
-### **Dynamic Loading**
-Plugins can be loaded from:
-- Local filesystem paths
-- Git repositories
-- Package imports
 
 ### **Plugin Discovery**
 ```bash
@@ -301,28 +281,19 @@ go test -cover ./internal/services/redis
 
 ## Plugin Management Commands
 
-The enhanced plugin-manager provides:
+The plugin-manager provides built-in plugin management:
 
 ```bash
-# Install from git repository
-./bin/vps-init plugin install github.com/user/plugin
+# List all built-in plugins
+./bin/vps-init plugin list
 
-# Update plugins
-./bin/vps-init plugin update --all
-./bin/vps-init plugin update plugin-name
+# Show plugin information
+./bin/vps-init plugin info nginx
 
-# Remove plugins
-./bin/vps-init plugin remove plugin-name --purge
-
-# Search for plugins
-./bin/vps-init plugin search database
-
-# Validate plugins
+# Validate all built-in plugins
 ./bin/vps-init plugin validate
 ```
 
 ## Environment Variables
 
 - `SSH_SUDO_PASS_<ALIAS>`: Sudo password for specific alias
-- `VPS_INIT_CACHE_DIR`: Custom cache directory for git plugins
-- `VPS_INIT_INSTALL_DIR`: Custom installation directory

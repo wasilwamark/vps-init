@@ -103,4 +103,4 @@ go.work
 # plugins
 vps-init-core
 vps-init-ssh
-vps-init-keycloak
+vps-init-keycloak~/.vps-init/cache/
