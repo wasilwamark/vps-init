@@ -2,11 +2,11 @@
 
 <div align="center">
 
-![VPS-Init Logo](https://via.placeholder.com/200x80/333/fff?text=VPS-Init)
+<img src="./vps-init-logo.png" width="200" alt="VPS-Init Logo">
 
-**A Go-based CLI tool for quick and easy server configuration**
+**A CLI tool for Easy Server Management**
 
-**No Agents • No Terraform • Just SSH**
+**SSH all the way**
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -16,7 +16,7 @@
 
 ## About
 
-VPS-Init is a lightweight CLI tool designed to simplify server management. Unlike complex infrastructure-as-code tools like Terraform or Ansible, VPS-Init works directly over SSH to run common configuration tasks. It's perfect for developers who manage a few VPS instances and want a quick, standardized way to update systems and install services without setting up a control node.
+VPS-Init manages your servers directly over SSH with simple commands. Perfect for individuals who want quick, standardized server configuration without complex Infrastructure as Code (IaC) tools.
 
 ## 🚀 Installation & Quick Start
 
