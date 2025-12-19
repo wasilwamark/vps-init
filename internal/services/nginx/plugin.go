@@ -44,43 +44,9 @@ func (p *Plugin) Stop(ctx context.Context) error {
 
 
 func (p *Plugin) GetRootCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "nginx",
-		Short: "Manage Nginx web server",
-		Long:  "Manage Nginx web server (install, config, ssl).",
-	}
-
-	// Add all commands for consistent help display
-	commands := []struct {
-		name        string
-		description string
-	}{
-		{"install", "Install Nginx"},
-		{"status", "Check Nginx status"},
-		{"start", "Start Nginx"},
-		{"stop", "Stop Nginx"},
-		{"restart", "Restart Nginx"},
-		{"reload", "Reload Nginx configuration"},
-		{"logs", "Stream Nginx logs [access|error|both]"},
-		{"list-sites", "List all configured sites"},
-		{"add-site", "Add a new site (reverse proxy)"},
-		{"remove-site", "Remove a site configuration"},
-		{"install-ssl", "Install SSL certificate using Certbot"},
-	}
-
-	for _, command := range commands {
-		subCmd := &cobra.Command{
-			Use:   command.name,
-			Short: command.description,
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Printf("To run on a server, use: vps-init user@host nginx %s\n", cmd.Name())
-				return nil
-			},
-		}
-		cmd.AddCommand(subCmd)
-	}
-
-	return cmd
+	// Return nil to prevent nginx from appearing as a top-level command
+	// nginx should only be accessible via the plugin system: vps-init user@host nginx <command>
+	return nil
 }
 	// Enhanced plugin interface methods
 func (p *Plugin) Validate() error {

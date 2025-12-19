@@ -120,39 +120,9 @@ func (p *Plugin) GetCommands() []plugin.Command {
 }
 
 func (p *Plugin) GetRootCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "system",
-		Short: "System management commands",
-		Long:  "Manage system updates and packages.",
-	}
-
-	// Add all commands for consistent help display
-	commands := []struct {
-		name        string
-		description string
-	}{
-		{"update", "Update package lists (apt update)"},
-		{"upgrade", "Upgrade installed packages (apt upgrade)"},
-		{"full-upgrade", "Perform full system upgrade (apt dist-upgrade)"},
-		{"autoremove", "Remove unused packages"},
-		{"shell", "Open interactive shell on server"},
-		{"install", "Install packages (apt install)"},
-		{"uninstall", "Uninstall packages (apt remove)"},
-	}
-
-	for _, command := range commands {
-		subCmd := &cobra.Command{
-			Use:   command.name,
-			Short: command.description,
-			RunE: func(cmd *cobra.Command, args []string) error {
-				fmt.Printf("To run on a server, use: vps-init user@host system %s\n", cmd.Name())
-				return nil
-			},
-		}
-		cmd.AddCommand(subCmd)
-	}
-
-	return cmd
+	// Return nil to prevent system from appearing as a top-level command
+	// system should only be accessible via the plugin system: vps-init user@host system <command>
+	return nil
 }
 
 func (p *Plugin) Start(ctx context.Context) error {
