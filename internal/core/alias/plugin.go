@@ -81,41 +81,9 @@ func (p *Plugin) GetCommands() []plugin.Command {
 }
 
 func (p *Plugin) GetRootCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "alias",
-		Short: "Manage server aliases",
-		Long: `Manage server aliases for easier access.
-
-Examples:
-  vps-init alias add myserver user@host.com
-  vps-init alias list
-  vps-init alias remove myserver`,
-	}
-
-	addCmd := &cobra.Command{
-		Use:   "add <name> <user@host>",
-		Short: "Add a server alias",
-		Args:  cobra.ExactArgs(2),
-		Run:   p.runAdd,
-	}
-	cmd.AddCommand(addCmd)
-
-	listCmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all server aliases",
-		Run:   p.runList,
-	}
-	cmd.AddCommand(listCmd)
-
-	removeCmd := &cobra.Command{
-		Use:   "remove <name>",
-		Short: "Remove a server alias",
-		Args:  cobra.ExactArgs(1),
-		Run:   p.runRemove,
-	}
-	cmd.AddCommand(removeCmd)
-
-	return cmd
+	// Return nil to prevent alias from appearing as a top-level command
+	// alias is already implemented as a native CLI command in internal/cli/root.go
+	return nil
 }
 
 func (p *Plugin) Start(ctx context.Context) error {
