@@ -72,6 +72,7 @@ VPS-Init is built on a modular plugin architecture.
 *   [**MySQL/MariaDB**](docs/plugins/mysql.md): Database management with user and database operations.
 *   [**WordPress**](docs/plugins/wordpress.md): Automated LEMP stack & site deployment.
 *   [**Redis**](docs/plugins/redis.md): Redis database server management with backup capabilities.
+*   [**Keycloak**](docs/plugins/keycloak.md): Identity and access management with SSL, realm management, and backup.
 *   [**Restic**](docs/plugins/restic.md): S3 backup manager with database support.
 *   [**Language Runtime**](internal/services/runtimes/README.md): Multiple language runtime management (Node.js, Python, Go, Java, Rust, PHP, Ruby, .NET).
 
@@ -82,6 +83,9 @@ VPS-Init is built on a modular plugin architecture.
 - **MySQL/MariaDB**: Complete database server with user management
 - **Redis**: High-performance in-memory data store with persistence
 - **Restic**: S3-compatible backup system
+
+#### **Identity & Authentication**
+- **Keycloak**: Enterprise identity and access management with SSO, OAuth2, and OpenID Connect
 
 #### **Security & Networking**
 - **Firewall**: UFW-based firewall with rule management
@@ -197,6 +201,36 @@ vps-init myserver docker deploy ./docker-compose.yml
 
 # Install Portainer for web UI management
 vps-init myserver docker install-portainer
+```
+
+### Identity & Access Management
+```bash
+# Install Keycloak with default domain
+vps-init myserver keycloak install
+
+# Install Keycloak with custom domain
+vps-init myserver keycloak install sso.example.com
+
+# Configure SSL for Keycloak
+vps-init myserver keycloak ssl sso.example.com
+
+# Create a new realm for applications
+vps-init myserver keycloak realm create my-apps
+
+# Create a new user in specific realm
+vps-init myserver keycloak user create app-user my-apps
+
+# Create OAuth client for application
+vps-init myserver keycloak client create web-app my-apps
+
+# Backup Keycloak configuration and data
+vps-init myserver keycloak backup
+
+# Check Keycloak service status
+vps-init myserver keycloak status
+
+# View Keycloak logs
+vps-init myserver keycloak logs
 ```
 
 ### Managing Language Runtime
