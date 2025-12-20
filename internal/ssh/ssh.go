@@ -360,10 +360,13 @@ func (c *connection) Shell() error {
 
 // WriteFile writes content to a file on the remote host
 func (c *connection) WriteFile(content, path string) error {
-	// Use cat with heredoc to write file
-	// Properly escape any single quotes in the content
-	escapedContent := strings.ReplaceAll(content, "'", "'\"'\"'")
-	cmd := fmt.Sprintf("cat > %s << 'EOF'\n%s\nEOF", path, escapedContent)
+	// Use printf with proper escaping to write file
+	// This avoids issues with special characters in content
+	escapedContent := strings.ReplaceAll(content, "\\", "\\\\")
+	escapedContent = strings.ReplaceAll(escapedContent, "\"", "\\\"")
+	escapedContent = strings.ReplaceAll(escapedContent, "`", "\\`")
+	escapedContent = strings.ReplaceAll(escapedContent, "$", "\\$")
+	cmd := fmt.Sprintf("printf \"%s\" > %s", escapedContent, path)
 
 	result := c.runCommandWithContext(context.Background(), cmd)
 	if !result.Success {
@@ -374,9 +377,13 @@ func (c *connection) WriteFile(content, path string) error {
 
 // AppendFile appends content to a file on the remote host
 func (c *connection) AppendFile(content, path string) error {
-	// Use cat with heredoc to append file
-	escapedContent := strings.ReplaceAll(content, "'", "'\"'\"'")
-	cmd := fmt.Sprintf("cat >> %s << 'EOF'\n%s\nEOF", path, escapedContent)
+	// Use printf with proper escaping to append file
+	// This avoids issues with special characters in content
+	escapedContent := strings.ReplaceAll(content, "\\", "\\\\")
+	escapedContent = strings.ReplaceAll(escapedContent, "\"", "\\\"")
+	escapedContent = strings.ReplaceAll(escapedContent, "`", "\\`")
+	escapedContent = strings.ReplaceAll(escapedContent, "$", "\\$")
+	cmd := fmt.Sprintf("printf \"%s\" >> %s", escapedContent, path)
 
 	result := c.runCommandWithContext(context.Background(), cmd)
 	if !result.Success {
