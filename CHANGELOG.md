@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-20
+
+### 🐛 Bug Fixes
+
+*   **SSH Module**: Improve WriteFile and AppendFile escaping to prevent configuration errors
+    *   Enhanced escaping mechanisms for single quotes in file content
+    *   More robust file writing operations over SSH connections
+
+### ✨ Improvements
+
+*   **Documentation**: Added project logo to README.md for better branding
+*   **Developer Guide**: Updated CLAUDE.md with git operations policy and enhanced development guidelines
+
+---
+
 ## [v0.0.2] - 2025-12-14
 
 ### 🚀 New Plugins
