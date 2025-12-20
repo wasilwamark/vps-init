@@ -203,6 +203,14 @@ plugin.RegisterBuiltin("github.com/wasilwps-init/services/nginx", &nginx.Plugin{
 
 ## Important Implementation Details
 
+### **Git Operations Policy**
+**IMPORTANT**: Claude should NEVER perform git operations such as:
+- `git commit`, `git add`, `git push`, `git pull`
+- Creating commits, branches, or pull requests
+- Any git repository manipulation
+
+Git operations should only be performed by human developers.
+
 ### **SSH Connection Usage**
 ```go
 // Always handle SSH connections properly
@@ -249,6 +257,8 @@ func getSudoPass(flags map[string]interface{}) string {
 3. **Building**: `make build` or `make dev`
 4. **Installation**: `make install` for local testing
 5. **Validation**: `./bin/vps-init plugin validate`
+
+**Note**: After making code changes, git operations (add, commit, push) should be performed manually by the developer.
 
 ## Testing Strategy
 
