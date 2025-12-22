@@ -156,7 +156,12 @@ PrivateKey = %s
 	// Write Config
 	tmpPath := "/tmp/wg0.conf"
 	if err := conn.WriteFile(config, tmpPath); err != nil {
-		return fmt.Errorf("failed to write tmp config")
+		// Try home directory as fallback
+		homeTmpPath := "$HOME/wg0.conf"
+		if err := conn.WriteFile(config, homeTmpPath); err != nil {
+			return fmt.Errorf("failed to write tmp config")
+		}
+		tmpPath = homeTmpPath
 	}
 
 	// Move to /etc/wireguard/
@@ -337,7 +342,12 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn plugin.Connection, arg
 		newConfigStr := strings.Join(newConfig, "\n")
 		tmpConfig := "/tmp/wg0_with_all_names.conf"
 		if err := conn.WriteFile(newConfigStr, tmpConfig); err != nil {
-			return fmt.Errorf("failed to write updated config: %w", err)
+			// Try home directory as fallback
+			homeTmpConfig := "$HOME/wg0_with_all_names.conf"
+			if err := conn.WriteFile(newConfigStr, homeTmpConfig); err != nil {
+				return fmt.Errorf("failed to write updated config: %w", err)
+			}
+			tmpConfig = homeTmpConfig
 		}
 
 		// Replace the config file
@@ -380,7 +390,12 @@ PersistentKeepalive = 25
 	// Write to tmp file then qrencode
 	tmpClient := fmt.Sprintf("/tmp/%s.conf", name)
 	if err := conn.WriteFile(clientConfig, tmpClient); err != nil {
-		return fmt.Errorf("failed to write client config: %w", err)
+		// Try home directory as fallback
+		homeTmpClient := fmt.Sprintf("$HOME/%s.conf", name)
+		if err := conn.WriteFile(clientConfig, homeTmpClient); err != nil {
+			return fmt.Errorf("failed to write client config: %w", err)
+		}
+		tmpClient = homeTmpClient
 	}
 	conn.RunInteractive(fmt.Sprintf("qrencode -t ansiutf8 < %s", tmpClient))
 
@@ -575,10 +590,59 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn plugin.Connection, 
 
 	// Write new config
 	newConfigStr := strings.Join(newConfig, "\n")
-	tmpPath := "/tmp/wg0_new.conf"
-	if err := conn.WriteFile(newConfigStr, tmpPath); err != nil {
-		return fmt.Errorf("failed to write new config")
+
+	// Debug: print what we're about to write
+	fmt.Printf("🐛 Debug: Generated config length: %d\n", len(newConfigStr))
+	if len(newConfigStr) == 0 {
+		return fmt.Errorf("generated empty config - this shouldn't happen")
 	}
+
+	// Show first few lines for debugging
+	debugLines := strings.Split(newConfigStr, "\n")
+	fmt.Printf("🐛 Debug: First 3 lines of new config:\n")
+	for i, line := range debugLines {
+		if i >= 3 {
+			break
+		}
+		fmt.Printf("   %d: %s\n", i, line)
+	}
+
+	// Try to write to user's home directory first, then move with sudo
+	tmpPath := "/tmp/wg0_new.conf"
+	fmt.Printf("🐛 Debug: Writing config to %s\n", tmpPath)
+	fmt.Printf("🐛 Debug: About to write content of length %d\n", len(newConfigStr))
+
+	// First try normal write to /tmp
+	if err := conn.WriteFile(newConfigStr, tmpPath); err != nil {
+		fmt.Printf("🐛 Debug: Normal WriteFile failed: %v\n", err)
+
+		// Try writing to home directory instead
+		homeTmpPath := "$HOME/wg0_new.conf"
+		fmt.Printf("🐛 Debug: Trying to write to home directory: %s\n", homeTmpPath)
+
+		if err := conn.WriteFile(newConfigStr, homeTmpPath); err != nil {
+			fmt.Printf("🐛 Debug: Home directory WriteFile also failed: %v\n", err)
+
+			// Last resort: use sudo to write directly
+			fmt.Printf("🐛 Debug: Trying sudo write method...\n")
+			escapedContent := strings.ReplaceAll(newConfigStr, "'", "'\"'\"'")
+			sudoWriteCmd := fmt.Sprintf("echo '%s' | sudo tee %s > /dev/null", escapedContent, tmpPath)
+			result := conn.RunSudo(sudoWriteCmd, pass)
+			if !result.Success {
+				fmt.Printf("🐛 Debug: Sudo write failed: %s\n", result.Stderr)
+				return fmt.Errorf("failed to write new config (all methods): %w", err)
+			}
+			fmt.Printf("🐛 Debug: Sudo write succeeded!\n")
+		} else {
+			// If home directory worked, move it with sudo
+			fmt.Printf("🐛 Debug: Home directory write succeeded, moving with sudo...\n")
+			result := conn.RunSudo(fmt.Sprintf("mv %s %s", homeTmpPath, tmpPath), pass)
+			if !result.Success {
+				return fmt.Errorf("failed to move config from home: %s", result.Stderr)
+			}
+		}
+	}
+	fmt.Printf("🐛 Debug: Config file written successfully\n")
 
 	// Backup and replace config
 	backupPath := fmt.Sprintf("/etc/wireguard/wg0.conf.bak.%d", time.Now().Unix())
