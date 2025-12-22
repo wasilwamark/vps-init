@@ -33,8 +33,8 @@ func Execute() error {
 	// Check if the first argument is a known command
 	if len(os.Args) > 1 {
 		cmdName := os.Args[1]
-		// Check aliases and help
-		if cmdName == "help" || cmdName == "--help" || cmdName == "-h" {
+		// Check aliases, help, and version
+		if cmdName == "help" || cmdName == "--help" || cmdName == "-h" || cmdName == "--version" || cmdName == "-v" {
 			return rootCmd.Execute()
 		}
 

@@ -252,11 +252,11 @@ func (p *Plugin) addPeerHandler(ctx context.Context, conn plugin.Connection, arg
 
 	// Get Server Endpoint (Public IP)
 	// Try to guess or use host
-	// Try to get the public IP from the server
-	result = conn.RunCommand("curl -s ifconfig.me || curl -s ipinfo.io/ip || echo 'YOUR_SERVER_IP'", plugin.WithHideOutput())
+	// Try to get the public IPv4 IP from the server
+	result = conn.RunCommand("curl -4 -s ifconfig.me || curl -4 -s ipinfo.io/ip || curl -4 -s icanhazip.com || echo 'YOUR_SERVER_IP'", plugin.WithHideOutput())
 	endpoint := fmt.Sprintf("%s:51820", strings.TrimSpace(result.Stdout))
 	if result.Stdout == "" || strings.Contains(result.Stdout, "YOUR_SERVER_IP") {
-		fmt.Println("⚠️  Could not auto-detect server IP. Please manually set the Endpoint in the client config.")
+		fmt.Println("⚠️  Could not auto-detect server IPv4 IP. Please manually set the Endpoint in the client config.")
 		endpoint = "YOUR_SERVER_IP:51820"
 	}
 

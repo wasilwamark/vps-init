@@ -7,32 +7,24 @@ build:
 	go build -o bin/vps-init ./cmd/vps-init
 	@echo "Build complete: bin/vps-init"
 
-# Install to system (clean build + install)
+# Install to system (clean build + install globally only)
 install: clean build
-	@echo "Installing vps-init to /usr/local/bin..."
-	@if sudo cp bin/vps-init /usr/local/bin/ 2>/dev/null && sudo chmod +x /usr/local/bin/vps-init; then \
-		echo "✓ Global installation successful"; \
-	else \
-		echo "✗ Global installation failed (needs sudo)"; \
-	fi
-	@echo "Installing vps-init to ~/bin..."
-	@mkdir -p ~/bin
-	@cp bin/vps-init ~/bin/ && chmod +x ~/bin/vps-init && echo "✓ Local installation successful" || echo "✗ Local installation failed"
-	@echo "Installation complete!"
-	@echo ""
-	@echo "Installed to:"
-	@if [ -f /usr/local/bin/vps-init ]; then \
+	@echo "🗑️  Removing any existing local installations..."
+	@rm -f ~/bin/vps-init ~/.local/bin/vps-init 2>/dev/null || true
+	@echo "📦 Installing vps-init to /usr/local/bin (global only)..."
+	@if sudo cp bin/vps-init /usr/local/bin/ && sudo chmod +x /usr/local/bin/vps-init; then \
+		echo "✅ Global installation successful"; \
+		echo ""; \
+		echo "Installation complete!"; \
+		echo ""; \
+		echo "Installed to:"; \
 		echo "  - /usr/local/bin/vps-init (global) ✓"; \
+		echo ""; \
+		echo "You can now run: vps-init --help"; \
 	else \
-		echo "  - /usr/local/bin/vps-init (global) ✗"; \
+		echo "❌ Global installation failed (needs sudo privileges)"; \
+		exit 1; \
 	fi
-	@if [ -f ~/bin/vps-init ]; then \
-		echo "  - ~/bin/vps-init (local) ✓"; \
-	else \
-		echo "  - ~/bin/vps-init (local) ✗"; \
-	fi
-	@echo ""
-	@echo "You can now run: vps-init --help"
 
 # Build for multiple platforms
 build-all:
@@ -50,13 +42,34 @@ build-all:
 	GOOS=windows GOARCH=amd64 go build -o bin/vps-init-windows-amd64.exe ./cmd/vps-init
 	@echo "All builds completed in bin/"
 
-# Quick install (build and copy to local path)
+# Quick install (build and copy to global path first, then local if needed)
 install-local: build
-	cp bin/vps-init /usr/local/bin/ 2>/dev/null || cp bin/vps-init ~/bin/ 2>/dev/null || cp bin/vps-init ~/.local/bin/ 2>/dev/null || echo "Add $(PWD)/bin to your PATH"
+	@echo "🗑️  Removing any existing local installations to avoid conflicts..."
+	@rm -f ~/bin/vps-init ~/.local/bin/vps-init 2>/dev/null || true
+	@echo "📦 Installing to global location first..."
+	@if cp bin/vps-init /usr/local/bin/ && chmod +x /usr/local/bin/vps-init 2>/dev/null; then \
+		echo "✅ Global installation successful"; \
+	elif cp bin/vps-init ~/bin/ && chmod +x ~/bin/vps-init 2>/dev/null; then \
+		echo "⚠️  Global installation failed, installed to ~/bin/vps-init"; \
+	elif mkdir -p ~/.local/bin && cp bin/vps-init ~/.local/bin/ && chmod +x ~/.local/bin/vps-init 2>/dev/null; then \
+		echo "⚠️  Global and ~/bin installation failed, installed to ~/.local/bin/vps-init"; \
+		echo "💡 Add ~/.local/bin to your PATH: export PATH=\"$$HOME/.local/bin:$$PATH\""; \
+	else \
+		echo "❌ All installation locations failed"; \
+		echo "💡 Add $(PWD)/bin to your PATH: export PATH=\"$(PWD)/bin:$$PATH\""; \
+		exit 1; \
+	fi
 
 # Clean build artifacts
 clean:
 	rm -rf bin/
+
+# Clean local installations (remove only local copies, keep global)
+clean-local:
+	@echo "🗑️  Removing local installations..."
+	@rm -f ~/bin/vps-init ~/.local/bin/vps-init 2>/dev/null || true
+	@echo "✅ Local installations removed"
+	@echo "💡 Global installation at /usr/local/bin/vps-init remains untouched"
 
 # Run tests
 test:
@@ -81,4 +94,15 @@ dev:
 
 # Install development version
 install-dev: dev
-	cp bin/vps-init-dev /usr/local/bin/vps-init 2>/dev/null || cp bin/vps-init-dev ~/bin/vps-init 2>/dev/null || echo "Add bin to PATH"
+	@echo "🗑️  Removing any existing local installations to avoid conflicts..."
+	@rm -f ~/bin/vps-init ~/.local/bin/vps-init 2>/dev/null || true
+	@echo "🔧 Installing development version to global location first..."
+	@if cp bin/vps-init-dev /usr/local/bin/vps-init && chmod +x /usr/local/bin/vps-init 2>/dev/null; then \
+		echo "✅ Development version installed globally"; \
+	elif cp bin/vps-init-dev ~/bin/vps-init && chmod +x ~/bin/vps-init 2>/dev/null; then \
+		echo "⚠️  Global installation failed, installed to ~/bin/vps-init"; \
+	else \
+		echo "❌ Installation failed"; \
+		echo "💡 Add $(PWD)/bin to your PATH: export PATH=\"$(PWD)/bin:$$PATH\""; \
+		exit 1; \
+	fi
