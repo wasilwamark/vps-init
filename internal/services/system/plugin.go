@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -35,7 +37,8 @@ func (p *Plugin) Version() string {
 func (p *Plugin) Author() string {
 	return "VPS-Init Team"
 }
-	// Enhanced plugin interface methods
+
+// Enhanced plugin interface methods
 func (p *Plugin) Validate() error {
 	// TODO: Add plugin-specific validation logic
 	return nil
@@ -72,7 +75,6 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 		},
 	}
 }
-
 
 func (p *Plugin) Initialize(config map[string]interface{}) error {
 	p.config = config
@@ -133,8 +135,6 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-
-
 // Command Handlers
 
 // Helper for sudo errors
@@ -163,11 +163,19 @@ func (p *Plugin) checkSudoResult(result plugin.Result, flags map[string]interfac
 	return fmt.Errorf(errMsg)
 }
 
+// Helper to get package manager for connection
+func (p *Plugin) getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
+}
+
 func (p *Plugin) handleUpdate(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔄 Updating package lists...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	result := conn.RunSudo("apt-get update", sudoPass)
+	pkgMgr := p.getPackageManager(conn)
+	cmd, _ := pkgMgr.Update()
+	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
@@ -181,8 +189,9 @@ func (p *Plugin) handleUpgrade(ctx context.Context, conn plugin.Connection, args
 	fmt.Println("⬆️  Upgrading packages...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	// DEBIAN_FRONTEND=noninteractive to avoid prompts
-	result := conn.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get upgrade -y", sudoPass)
+	pkgMgr := p.getPackageManager(conn)
+	cmd, _ := pkgMgr.Upgrade()
+	result := conn.RunSudo(cmd, sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
 	}
@@ -195,7 +204,9 @@ func (p *Plugin) handleFullUpgrade(ctx context.Context, conn plugin.Connection, 
 	fmt.Println("🚀 Performing full system upgrade...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	result := conn.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y", sudoPass)
+	pkgMgr := p.getPackageManager(conn)
+	cmd, _ := pkgMgr.DistUpgrade()
+	result := conn.RunSudo(cmd, sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
 	}
@@ -208,7 +219,9 @@ func (p *Plugin) handleAutoremove(ctx context.Context, conn plugin.Connection, a
 	fmt.Println("🧹 Removing unused packages...")
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	result := conn.RunSudo("DEBIAN_FRONTEND=noninteractive apt-get autoremove -y", sudoPass)
+	pkgMgr := p.getPackageManager(conn)
+	cmd, _ := pkgMgr.Autoremove()
+	result := conn.RunSudo(cmd, sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
 	}
@@ -231,8 +244,11 @@ func (p *Plugin) handleInstall(ctx context.Context, conn plugin.Connection, args
 	fmt.Printf("📦 Installing: %s...\n", packages)
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	// -y to assume yes
-	cmd := fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get install -y %s", packages)
+	pkgMgr := p.getPackageManager(conn)
+	cmd, err := pkgMgr.Install(args...)
+	if err != nil {
+		return err
+	}
 	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
@@ -252,8 +268,11 @@ func (p *Plugin) handleUninstall(ctx context.Context, conn plugin.Connection, ar
 	fmt.Printf("🗑️  Uninstalling: %s...\n", packages)
 
 	sudoPass, _ := flags["sudo-password"].(string)
-	// -y to assume yes
-	cmd := fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get remove -y %s", packages)
+	pkgMgr := p.getPackageManager(conn)
+	cmd, err := pkgMgr.Remove(args...)
+	if err != nil {
+		return err
+	}
 	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {

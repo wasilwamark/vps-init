@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/wasilwamark/vps-init/internal/distro"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -55,6 +57,7 @@ type Connection interface {
 	InstallPackage(packageName string) bool
 
 	// Platform detection
+	GetDistroInfo() interface{}
 	IsUbuntu() bool
 	IsDebian() bool
 	IsCentOS() bool
@@ -86,7 +89,9 @@ func DefaultConfig() Config {
 
 // connection implements the Connection interface
 type connection struct {
-	config Config
+	config     Config
+	distroInfo *distro.DistroInfo
+	distroOnce sync.Once
 }
 
 // NewConnection creates a new SSH connection
@@ -498,10 +503,10 @@ func (c *connection) IsHealthy() bool {
 // GetConnectionStats returns connection statistics
 func (c *connection) GetConnectionStats() *plugin.ConnectionStats {
 	return &plugin.ConnectionStats{
-		ConnectedAt:  time.Now(),
-		LastActivity: time.Now(),
-		CommandsRun:  0,
-		BytesSent:    0,
+		ConnectedAt:   time.Now(),
+		LastActivity:  time.Now(),
+		CommandsRun:   0,
+		BytesSent:     0,
 		BytesReceived: 0,
 	}
 }
@@ -625,34 +630,72 @@ func (c *connection) Systemctl(action, service string) bool {
 	return result.Success
 }
 
+// GetDistroInfo detects and returns distribution information
+func (c *connection) GetDistroInfo() interface{} {
+	c.distroOnce.Do(func() {
+		result := c.RunCommand("cat /etc/os-release", false)
+		if result.Success {
+			osRelease, err := distro.DetectOSRelease(result.Stdout)
+			if err == nil {
+				c.distroInfo = distro.GetDistroInfo(osRelease)
+			}
+		}
+
+		if c.distroInfo == nil {
+			c.distroInfo = &distro.DistroInfo{
+				ID:         "unknown",
+				Name:       "Unknown",
+				Family:     distro.DistroFamilyDebian,
+				PackageMgr: distro.PackageManagerAPT,
+				ServiceMgr: distro.ServiceManagerSystemd,
+			}
+		}
+	})
+	return c.distroInfo
+}
+
 // InstallPackage installs a package
 func (c *connection) InstallPackage(packageName string) bool {
-	result := c.RunCommand(fmt.Sprintf("apt-get install -y %s", packageName), true)
+	distroInfo := c.GetDistroInfo().(*distro.DistroInfo)
+
+	var cmd string
+	switch distroInfo.PackageMgr {
+	case distro.PackageManagerAPT:
+		cmd = fmt.Sprintf("apt-get install -y %s", packageName)
+	case distro.PackageManagerDNF:
+		cmd = fmt.Sprintf("dnf install -y %s", packageName)
+	case distro.PackageManagerYUM:
+		cmd = fmt.Sprintf("yum install -y %s", packageName)
+	case distro.PackageManagerPacman:
+		cmd = fmt.Sprintf("pacman -S --noconfirm %s", packageName)
+	case distro.PackageManagerAPK:
+		cmd = fmt.Sprintf("apk add %s", packageName)
+	default:
+		cmd = fmt.Sprintf("apt-get install -y %s", packageName)
+	}
+
+	result := c.RunCommand(cmd, true)
 	return result.Success
 }
 
 // IsUbuntu checks if system is Ubuntu
 func (c *connection) IsUbuntu() bool {
-	result := c.RunCommand("lsb_release -si", false)
-	return result.Success && strings.Contains(strings.ToUpper(result.Stdout), "UBUNTU")
+	return c.GetDistroInfo().(*distro.DistroInfo).IsUbuntu()
 }
 
 // IsDebian checks if system is Debian
 func (c *connection) IsDebian() bool {
-	result := c.RunCommand("lsb_release -si", false)
-	return result.Success && strings.Contains(strings.ToUpper(result.Stdout), "DEBIAN")
+	return c.GetDistroInfo().(*distro.DistroInfo).IsDebian()
 }
 
 // IsCentOS checks if system is CentOS
 func (c *connection) IsCentOS() bool {
-	result := c.RunCommand("lsb_release -si", false)
-	return result.Success && strings.Contains(strings.ToUpper(result.Stdout), "CENTOS")
+	return c.GetDistroInfo().(*distro.DistroInfo).IsCentOS()
 }
 
 // IsRedHat checks if system is RedHat
 func (c *connection) IsRedHat() bool {
-	result := c.RunCommand("lsb_release -si", false)
-	return result.Success && strings.Contains(strings.ToUpper(result.Stdout), "RED HAT")
+	return c.GetDistroInfo().(*distro.DistroInfo).IsRedHat()
 }
 
 // Helper function to create connection from SSHConfig (used by config.go)

@@ -40,16 +40,16 @@ type Plugin interface {
 // Dependency represents a plugin dependency
 type Dependency struct {
 	Name     string   `json:"name"`
-	Version  string   `json:"version,omitempty"`  // Semantic version constraint
+	Version  string   `json:"version,omitempty"` // Semantic version constraint
 	Optional bool     `json:"optional"`
 	Tags     []string `json:"tags,omitempty"`
 }
 
 // Compatibility defines plugin compatibility requirements
 type Compatibility struct {
-	MinVPSInitVersion string `json:"min_vps_init_version"`
-	MaxVPSInitVersion string `json:"max_vps_init_version,omitempty"`
-	GoVersion         string `json:"go_version,omitempty"`
+	MinVPSInitVersion string   `json:"min_vps_init_version"`
+	MaxVPSInitVersion string   `json:"max_vps_init_version,omitempty"`
+	GoVersion         string   `json:"go_version,omitempty"`
 	Platforms         []string `json:"platforms,omitempty"` // e.g., ["linux/amd64", "linux/arm64"]
 	Tags              []string `json:"tags,omitempty"`
 }
@@ -97,29 +97,29 @@ type CommandHandler func(ctx context.Context, conn Connection, args []string, fl
 
 // PluginMetadata contains plugin metadata
 type PluginMetadata struct {
-	Name              string                 `json:"name"`
-	Description       string                 `json:"description"`
-	Version           string                 `json:"version"`
-	Author            string                 `json:"author"`
-	License           string                 `json:"license"`
-	Homepage          string                 `json:"homepage"`
-	Repository        string                 `json:"repository"`
-	Tags              []string               `json:"tags"`
-	Config            map[string]interface{} `json:"config,omitempty"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Version     string                 `json:"version"`
+	Author      string                 `json:"author"`
+	License     string                 `json:"license"`
+	Homepage    string                 `json:"homepage"`
+	Repository  string                 `json:"repository"`
+	Tags        []string               `json:"tags"`
+	Config      map[string]interface{} `json:"config,omitempty"`
 
 	// Installation information
-	InstallPath       string    `json:"install_path,omitempty"`
-	InstalledAt       string    `json:"installed_at,omitempty"`
-	LastUpdated       string    `json:"last_updated,omitempty"`
-	Checksum          string    `json:"checksum,omitempty"`
-	Source            string    `json:"source,omitempty"`        // git URL, package path
-	BuildInfo         BuildInfo `json:"build_info,omitempty"`
+	InstallPath string    `json:"install_path,omitempty"`
+	InstalledAt string    `json:"installed_at,omitempty"`
+	LastUpdated string    `json:"last_updated,omitempty"`
+	Checksum    string    `json:"checksum,omitempty"`
+	Source      string    `json:"source,omitempty"` // git URL, package path
+	BuildInfo   BuildInfo `json:"build_info,omitempty"`
 
 	// Validation information
-	Validated         bool      `json:"validated"`
-	ValidationErrors  []string  `json:"validation_errors,omitempty"`
-	Signature         string    `json:"signature,omitempty"`     // GPG signature
-	TrustLevel        string    `json:"trust_level,omitempty"`  // official, community, untrusted
+	Validated        bool     `json:"validated"`
+	ValidationErrors []string `json:"validation_errors,omitempty"`
+	Signature        string   `json:"signature,omitempty"`   // GPG signature
+	TrustLevel       string   `json:"trust_level,omitempty"` // official, community, untrusted
 }
 
 // BuildInfo contains build-related plugin information
@@ -174,6 +174,7 @@ type Connection interface {
 	InstallPackage(packageName string) bool
 
 	// Platform detection
+	GetDistroInfo() interface{}
 	IsUbuntu() bool
 	IsDebian() bool
 	IsCentOS() bool
@@ -248,14 +249,14 @@ func (r *Result) JSON(v interface{}) error {
 
 // FileInfo represents file information
 type FileInfo struct {
-	Name         string
-	Size         int64
-	Mode         os.FileMode
-	ModTime      time.Time
-	IsDir        bool
-	Owner        string
-	Group        string
-	Permissions  string
+	Name        string
+	Size        int64
+	Mode        os.FileMode
+	ModTime     time.Time
+	IsDir       bool
+	Owner       string
+	Group       string
+	Permissions string
 }
 
 // PlatformInfo represents platform information
@@ -280,11 +281,11 @@ type MemoryInfo struct {
 
 // DiskInfo represents disk usage information
 type DiskInfo struct {
-	Total     uint64
-	Used      uint64
-	Free      uint64
-	Path      string
-	MountPath string
+	Total      uint64
+	Used       uint64
+	Free       uint64
+	Path       string
+	MountPath  string
 	Filesystem string
 }
 
@@ -298,11 +299,11 @@ type CPUInfo struct {
 
 // ConnectionStats represents connection statistics
 type ConnectionStats struct {
-	ConnectedAt    time.Time
-	LastActivity   time.Time
-	CommandsRun    int
-	BytesSent      int64
-	BytesReceived  int64
+	ConnectedAt   time.Time
+	LastActivity  time.Time
+	CommandsRun   int
+	BytesSent     int64
+	BytesReceived int64
 }
 
 // PluginLoader defines how plugins are loaded
