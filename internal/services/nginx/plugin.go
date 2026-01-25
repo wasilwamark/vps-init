@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -41,14 +43,13 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-
-
 func (p *Plugin) GetRootCommand() *cobra.Command {
 	// Return nil to prevent nginx from appearing as a top-level command
 	// nginx should only be accessible via the plugin system: vps-init user@host nginx <command>
 	return nil
 }
-	// Enhanced plugin interface methods
+
+// Enhanced plugin interface methods
 func (p *Plugin) Validate() error {
 	// TODO: Add plugin-specific validation logic
 	return nil
@@ -85,7 +86,6 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 		},
 	}
 }
-
 
 func (p *Plugin) GetCommands() []plugin.Command {
 	return []plugin.Command{
@@ -150,13 +150,19 @@ func (p *Plugin) GetCommands() []plugin.Command {
 func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🌐 Installing Nginx...")
 
-	// 1. Update apt
-	if result := conn.RunSudo("apt-get update", getSudoPass(flags)); !result.Success {
-		return fmt.Errorf("failed to update apt: %s", result.Stderr)
+	sudoPass := getSudoPass(flags)
+	pkgMgr := getPackageManager(conn)
+
+	updateCmd, _ := pkgMgr.Update()
+	if result := conn.RunSudo(updateCmd, sudoPass); !result.Success {
+		return fmt.Errorf("failed to update package lists: %s", result.Stderr)
 	}
 
-	// 2. Install nginx
-	if result := conn.RunSudo("apt-get install -y nginx", getSudoPass(flags)); !result.Success {
+	installCmd, err := pkgMgr.Install("nginx")
+	if err != nil {
+		return err
+	}
+	if result := conn.RunSudo(installCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to install nginx: %s", result.Stderr)
 	}
 
@@ -341,14 +347,16 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn plugin.Connection, arg
 
 	pass := getSudoPass(flags)
 	for _, cmd := range cmds {
-		result := conn.RunSudo(cmd, pass); if !result.Success {
+		result := conn.RunSudo(cmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed step '%s': %s", cmd, result.Stderr)
 		}
 	}
 
 	// Verify Config with Rollback
 	fmt.Println("🔍 Testing Nginx configuration...")
-	result := conn.RunSudo("nginx -t", pass); if !result.Success {
+	result := conn.RunSudo("nginx -t", pass)
+	if !result.Success {
 		fmt.Printf("❌ Config test failed details:\n%s\n", result.Stderr)
 		fmt.Println("🔄 Rolling back changes...")
 		// Remove the symlink
@@ -357,7 +365,8 @@ func (p *Plugin) addSiteHandler(ctx context.Context, conn plugin.Connection, arg
 	}
 
 	// Reload
-	result = conn.RunSudo("systemctl reload nginx", pass); if !result.Success {
+	result = conn.RunSudo("systemctl reload nginx", pass)
+	if !result.Success {
 		return fmt.Errorf("failed to reload nginx: %s", result.Stderr)
 	}
 
@@ -387,7 +396,8 @@ func (p *Plugin) removeSiteHandler(ctx context.Context, conn plugin.Connection, 
 
 	pass := getSudoPass(flags)
 	for _, cmd := range cmds {
-		result := conn.RunSudo(cmd, pass); if !result.Success {
+		result := conn.RunSudo(cmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed step '%s': %s", cmd, result.Stderr)
 		}
 	}
@@ -442,13 +452,18 @@ func (p *Plugin) installSSLHandler(ctx context.Context, conn plugin.Connection, 
 
 	fmt.Println("🔒 Installing Certbot and SSL...")
 
-	// Install certbot if needed
-	installCmds := []string{
-		"apt-get update",
-		"apt-get install -y certbot python3-certbot-nginx",
+	pkgMgr := getPackageManager(conn)
+	updateCmd, _ := pkgMgr.Update()
+	if result := conn.RunSudo(updateCmd, pass); !result.Success {
+		// Don't error immediately, might be installed
 	}
-	for _, cmd := range installCmds {
-		result := conn.RunSudo(cmd, pass); if !result.Success {
+
+	installCmd, err := pkgMgr.Install("certbot", "python3-certbot-nginx")
+	if err != nil {
+		// Continue anyway, certbot might already be installed
+		fmt.Printf("Warning: %v\n", err)
+	} else {
+		if result := conn.RunSudo(installCmd, pass); !result.Success {
 			// Don't error immediately, might be installed
 		}
 	}
@@ -465,4 +480,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return v.(string)
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

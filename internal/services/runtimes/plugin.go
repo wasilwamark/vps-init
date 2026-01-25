@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -55,12 +57,11 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-
-
 func (p *Plugin) GetRootCommand() *cobra.Command {
 	return nil
 }
-	// Enhanced plugin interface methods
+
+// Enhanced plugin interface methods
 func (p *Plugin) Validate() error {
 	// TODO: Add plugin-specific validation logic
 	return nil
@@ -97,7 +98,6 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 		},
 	}
 }
-
 
 func (p *Plugin) GetCommands() []plugin.Command {
 	return []plugin.Command{
@@ -209,7 +209,8 @@ func (p *Plugin) installPython(ctx context.Context, conn plugin.Connection, vers
 	if result := conn.RunCommand("command -v uv", plugin.WithHideOutput()); !result.Success {
 		fmt.Println("🔧 Installing uv...")
 		installDeps := `apt-get update 2>/dev/null || true && apt-get install -y curl`
-		result = conn.RunSudo(installDeps, pass); if !result.Success {
+		result = conn.RunSudo(installDeps, pass)
+		if !result.Success {
 			return fmt.Errorf("failed to install dependencies for uv: %s", result.Stderr)
 		}
 
@@ -259,9 +260,9 @@ func (p *Plugin) installGo(ctx context.Context, conn plugin.Connection, version 
 	// Format version string for Go download URLs
 	goVersion := version
 	if !strings.Contains(version, ".") {
-		goVersion = version + ".22.0"  // Default to latest patch for major version
+		goVersion = version + ".22.0" // Default to latest patch for major version
 	} else if len(strings.Split(version, ".")) == 2 {
-		goVersion = version + ".0"  // Add patch version if missing
+		goVersion = version + ".0" // Add patch version if missing
 	}
 
 	// Download and install Go
@@ -272,7 +273,8 @@ func (p *Plugin) installGo(ctx context.Context, conn plugin.Connection, version 
 
 	// Extract Go to /usr/local
 	extractCmd := fmt.Sprintf(`sudo tar -C /usr/local -xzf /tmp/go%s.linux-amd64.tar.gz`, goVersion)
-	result := conn.RunSudo(extractCmd, pass); if !result.Success {
+	result := conn.RunSudo(extractCmd, pass)
+	if !result.Success {
 		return fmt.Errorf("failed to extract Go: %s", result.Stderr)
 	}
 
@@ -317,7 +319,8 @@ func (p *Plugin) installJava(ctx context.Context, conn plugin.Connection, versio
 	}
 
 	// Install Java with single command (like other runtimes)
-	result := conn.RunSudo(installCmd, pass); if !result.Success {
+	result := conn.RunSudo(installCmd, pass)
+	if !result.Success {
 		return fmt.Errorf("failed to install Java %s: %s", version, result.Stderr)
 	}
 
@@ -376,7 +379,8 @@ func (p *Plugin) installPHP(ctx context.Context, conn plugin.Connection, version
 	// Add PPA for newer PHP versions, but handle gracefully if it fails
 	if version > "8.0" {
 		ppaCmd := `apt-get install -y software-properties-common && add-apt-repository -y ppa:ondrej/php 2>/dev/null || true`
-		result := conn.RunSudo(ppaCmd, pass); if !result.Success {
+		result := conn.RunSudo(ppaCmd, pass)
+		if !result.Success {
 			fmt.Printf("⚠️  Failed to add PHP PPA, trying with default repositories\n")
 		}
 	}
@@ -390,11 +394,13 @@ func (p *Plugin) installPHP(ctx context.Context, conn plugin.Connection, version
 	} else {
 		installCmd = fmt.Sprintf("apt-get update 2>/dev/null || true && apt-get install -y php%s php%s-cli php%s-fpm php%s-mbstring php%s-xml php%s-curl", version, version, version, version, version, version)
 	}
-	result := conn.RunSudo(installCmd, pass); if !result.Success {
+	result := conn.RunSudo(installCmd, pass)
+	if !result.Success {
 		// Fallback to default PHP version if specific version fails
 		fmt.Printf("⚠️  PHP %s not available, trying with default PHP version...\n", version)
 		fallbackCmd := "apt-get update 2>/dev/null || true && apt-get install -y php php-cli php-fpm php-mbstring php-xml php-curl"
-		result = conn.RunSudo(fallbackCmd, pass); if !result.Success {
+		result = conn.RunSudo(fallbackCmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed to install PHP: %s", result.Stderr)
 		}
 	}
@@ -424,16 +430,17 @@ func (p *Plugin) installRuby(ctx context.Context, conn plugin.Connection, versio
 	// Format Ruby version for rbenv
 	rubyVersion := version
 	if version == "3" {
-		rubyVersion = "3.3.0"  // Default to latest stable 3.x
+		rubyVersion = "3.3.0" // Default to latest stable 3.x
 	} else if len(strings.Split(version, ".")) == 1 {
-		rubyVersion = version + ".0.0"  // Add minor and patch if missing
+		rubyVersion = version + ".0.0" // Add minor and patch if missing
 	} else if len(strings.Split(version, ".")) == 2 {
-		rubyVersion = version + ".0"  // Add patch version if missing
+		rubyVersion = version + ".0" // Add patch version if missing
 	}
 
 	// Install Ruby using rbenv
 	installDeps := `apt-get update 2>/dev/null || true && apt-get install -y autoconf bison build-essential libssl-dev libyaml-dev libreadline6-dev zlib1g-dev libncurses5-dev libffi-dev libgdbm-dev git`
-	result := conn.RunSudo(installDeps, pass); if !result.Success {
+	result := conn.RunSudo(installDeps, pass)
+	if !result.Success {
 		return fmt.Errorf("failed to install Ruby build dependencies: %s", result.Stderr)
 	}
 
@@ -483,7 +490,8 @@ func (p *Plugin) installDotNet(ctx context.Context, conn plugin.Connection, vers
 
 	// Add Microsoft package repository
 	repoCmd := fmt.Sprintf(`apt-get update 2>/dev/null || true && apt-get install -y wget && wget https://packages.microsoft.com/config/ubuntu/%s/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && dpkg -i packages-microsoft-prod.deb`, ubuntuVersion)
-	result := conn.RunSudo(repoCmd, pass); if !result.Success {
+	result := conn.RunSudo(repoCmd, pass)
+	if !result.Success {
 		return fmt.Errorf("failed to add Microsoft repository: %s", result.Stderr)
 	}
 
@@ -493,7 +501,8 @@ func (p *Plugin) installDotNet(ctx context.Context, conn plugin.Connection, vers
 		dotnetVersion = version + ".0"
 	}
 	installCmd := fmt.Sprintf("apt-get update 2>/dev/null || true && apt-get install -y dotnet-sdk-%s", dotnetVersion)
-		result = conn.RunSudo(installCmd, pass); if !result.Success {
+	result = conn.RunSudo(installCmd, pass)
+	if !result.Success {
 		return fmt.Errorf("failed to install .NET %s: %s", version, result.Stderr)
 	}
 
@@ -514,9 +523,9 @@ func (p *Plugin) listHandler(ctx context.Context, conn plugin.Connection, args [
 	fmt.Println()
 
 	runtimes := []struct {
-		name   string
-		cmd    string
-		extra  string
+		name  string
+		cmd   string
+		extra string
 	}{
 		{"Node.js", "bash -c 'source ~/.nvm/nvm.sh && nvm list'", ""},
 		{"Python", "bash -c 'export PATH=\"$HOME/.local/bin:$PATH\" && uv python list'", ""},
@@ -594,7 +603,7 @@ func (p *Plugin) useNode(ctx context.Context, conn plugin.Connection, version st
 	}
 
 	verifyCmd := fmt.Sprintf(`bash -c 'source ~/.nvm/nvm.sh && node --version'`)
-		result := conn.RunCommand(verifyCmd, plugin.WithHideOutput())
+	result := conn.RunCommand(verifyCmd, plugin.WithHideOutput())
 	if !result.Success {
 		return fmt.Errorf("failed to verify Node.js version: %s", result.Stderr)
 	}
@@ -612,7 +621,7 @@ func (p *Plugin) usePython(ctx context.Context, conn plugin.Connection, version 
 	}
 
 	verifyCmd := fmt.Sprintf(`bash -c 'export PATH="$HOME/.local/bin:$PATH" && uv run python --version'`)
-		result := conn.RunCommand(verifyCmd, plugin.WithHideOutput())
+	result := conn.RunCommand(verifyCmd, plugin.WithHideOutput())
 	if !result.Success {
 		return fmt.Errorf("failed to verify Python version: %s", result.Stderr)
 	}
@@ -654,7 +663,8 @@ func (p *Plugin) removeHandler(ctx context.Context, conn plugin.Connection, args
 
 		// Remove Go installation
 		removeCmd := fmt.Sprintf(`sudo rm -rf /usr/local/go%s && sudo rm -rf /usr/local/go`, version)
-		result := conn.RunSudo(removeCmd, pass); if !result.Success {
+		result := conn.RunSudo(removeCmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed to remove Go %s: %s", version, result.Stderr)
 		}
 
@@ -676,7 +686,8 @@ func (p *Plugin) removeHandler(ctx context.Context, conn plugin.Connection, args
 
 		// Remove Java installation
 		removeCmd := fmt.Sprintf(`sudo rm -rf /usr/lib/jvm/%s`, javaDir)
-		result = conn.RunSudo(removeCmd, pass); if !result.Success {
+		result = conn.RunSudo(removeCmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed to remove Java %s: %s", version, result.Stderr)
 		}
 
@@ -706,7 +717,8 @@ func (p *Plugin) removeHandler(ctx context.Context, conn plugin.Connection, args
 	case "php":
 		// Remove PHP packages
 		removeCmd := fmt.Sprintf(`sudo apt-get remove -y php%s php%s-cli php%s-fpm php%s-mbstring php%s-xml php%s-curl`, version, version, version, version, version, version)
-		result := conn.RunSudo(removeCmd, pass); if !result.Success {
+		result := conn.RunSudo(removeCmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed to remove PHP %s: %s", version, result.Stderr)
 		}
 
@@ -724,7 +736,8 @@ func (p *Plugin) removeHandler(ctx context.Context, conn plugin.Connection, args
 	case "dotnet", ".net", "net":
 		// Remove .NET SDK
 		removeCmd := fmt.Sprintf(`sudo apt-get remove -y dotnet-sdk-%s`, version)
-		result := conn.RunSudo(removeCmd, pass); if !result.Success {
+		result := conn.RunSudo(removeCmd, pass)
+		if !result.Success {
 			return fmt.Errorf("failed to remove .NET %s: %s", version, result.Stderr)
 		}
 
@@ -808,4 +821,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return v.(string)
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

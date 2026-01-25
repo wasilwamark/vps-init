@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -429,14 +431,17 @@ func (p *Plugin) sslHandler(ctx context.Context, conn plugin.Connection, args []
 
 	// Install certbot and nginx plugin
 	fmt.Println("📦 Installing Certbot...")
-	installCmds := []string{
-		"apt-get update",
-		"apt-get install -y certbot python3-certbot-nginx",
+	pkgMgr := getPackageManager(conn)
+	updateCmd, _ := pkgMgr.Update()
+	if result := conn.RunSudo(updateCmd, sudoPass); !result.Success {
+		fmt.Printf("⚠️  Failed to update packages: %s\n", result.Stderr)
 	}
-
-	for _, cmd := range installCmds {
-		if result := conn.RunSudo(cmd, sudoPass); !result.Success {
-			fmt.Printf("⚠️  Failed to run '%s': %s\n", cmd, result.Stderr)
+	installCmd, err := pkgMgr.Install("certbot", "python3-certbot-nginx")
+	if err != nil {
+		fmt.Printf("⚠️  Failed to install certbot: %v\n", err)
+	} else {
+		if result := conn.RunSudo(installCmd, sudoPass); !result.Success {
+			fmt.Printf("⚠️  Failed to install certbot: %s\n", result.Stderr)
 		}
 	}
 

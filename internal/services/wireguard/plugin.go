@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -81,7 +83,7 @@ func (p *Plugin) GetCommands() []plugin.Command {
 			Description: "Remove a peer",
 			Handler:     p.removePeerHandler,
 		},
-				{
+		{
 			Name:        "status",
 			Description: "Show Wireguard status",
 			Handler:     p.statusHandler,
@@ -104,15 +106,22 @@ func (p *Plugin) GetCommands() []plugin.Command {
 func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🛡️  Installing Wireguard & Tools...")
 	pass := getSudoPass(flags)
+	pkgMgr := getPackageManager(conn)
 
 	// Update first
-	result := conn.RunSudo("apt-get update", pass); if !result.Success {
-		return fmt.Errorf("apt update failed: %s", result.Stderr)
+	updateCmd, _ := pkgMgr.Update()
+	result := conn.RunSudo(updateCmd, pass)
+	if !result.Success {
+		return fmt.Errorf("package update failed: %s", result.Stderr)
 	}
 
 	// Install packages: wireguard, wireguard-tools, qrencode (for QR display)
-	pkgs := "wireguard wireguard-tools qrencode iptables"
-	if result = conn.RunSudo(fmt.Sprintf("apt-get install -y %s", pkgs), pass); !result.Success {
+	pkgs := []string{"wireguard", "wireguard-tools", "qrencode", "iptables"}
+	installCmd, err := pkgMgr.Install(pkgs...)
+	if err != nil {
+		return err
+	}
+	if result = conn.RunSudo(installCmd, pass); !result.Success {
 		return fmt.Errorf("installation failed: %s", result.Stderr)
 	}
 
@@ -181,10 +190,12 @@ PrivateKey = %s
 	conn.RunSudo(fmt.Sprintf("ufw allow %s/udp", port), pass)
 
 	// 6. Start Service
-	result := conn.RunSudo("systemctl enable wg-quick@wg0", pass); if !result.Success {
+	result := conn.RunSudo("systemctl enable wg-quick@wg0", pass)
+	if !result.Success {
 		return fmt.Errorf("failed to enable service: %s", result.Stderr)
 	}
-	result = conn.RunSudo("systemctl start wg-quick@wg0", pass); if !result.Success {
+	result = conn.RunSudo("systemctl start wg-quick@wg0", pass)
+	if !result.Success {
 		return fmt.Errorf("failed to start service: %s", result.Stderr)
 	}
 
@@ -538,7 +549,7 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn plugin.Connection, 
 			// Check if this is the peer to remove by looking for its public key
 			isTargetPeer := false
 			// Look ahead for the PublicKey
-			for j := i + 1; j < len(lines) && j < i + 10; j++ {
+			for j := i + 1; j < len(lines) && j < i+10; j++ {
 				nextLine := strings.TrimSpace(lines[j])
 				if strings.HasPrefix(nextLine, "PublicKey =") {
 					parts := strings.SplitN(nextLine, "=", 2)
@@ -666,7 +677,6 @@ func (p *Plugin) removePeerHandler(ctx context.Context, conn plugin.Connection, 
 	return nil
 }
 
-
 func (p *Plugin) statusHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🔌 Wireguard Service Status:")
 	conn.RunInteractive("systemctl status wg-quick@wg0")
@@ -741,18 +751,18 @@ func (p *Plugin) listPeersHandler(ctx context.Context, conn plugin.Connection, a
 	// Get active peers from wg show
 	activeRes := conn.RunSudo("wg show wg0", pass)
 	var activePeers map[string]struct {
-		endpoint    string
-		allowedIps  string
+		endpoint        string
+		allowedIps      string
 		latestHandshake string
-		transferRx  string
-		transferTx  string
+		transferRx      string
+		transferTx      string
 	}
 	activePeers = make(map[string]struct {
-		endpoint    string
-		allowedIps  string
+		endpoint        string
+		allowedIps      string
 		latestHandshake string
-		transferRx  string
-		transferTx  string
+		transferRx      string
+		transferTx      string
 	})
 
 	if activeRes.Success {
@@ -767,11 +777,11 @@ func (p *Plugin) listPeersHandler(ctx context.Context, conn plugin.Connection, a
 				if len(parts) >= 2 {
 					currentPeer = parts[1]
 					activePeers[currentPeer] = struct {
-						endpoint    string
-						allowedIps  string
+						endpoint        string
+						allowedIps      string
 						latestHandshake string
-						transferRx  string
-						transferTx  string
+						transferRx      string
+						transferTx      string
 					}{}
 				}
 			} else if currentPeer != "" {
@@ -998,4 +1008,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return v.(string)
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

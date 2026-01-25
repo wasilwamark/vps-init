@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -39,12 +41,11 @@ func (p *Plugin) Stop(ctx context.Context) error {
 	return nil
 }
 
-
-
 func (p *Plugin) GetRootCommand() *cobra.Command {
 	return nil
 }
-	// Enhanced plugin interface methods
+
+// Enhanced plugin interface methods
 func (p *Plugin) Validate() error {
 	// TODO: Add plugin-specific validation logic
 	return nil
@@ -82,7 +83,6 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 	}
 }
 
-
 func (p *Plugin) GetCommands() []plugin.Command {
 	return []plugin.Command{
 		{
@@ -111,21 +111,34 @@ func (p *Plugin) GetCommands() []plugin.Command {
 func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🛡️  Installing Fail2Ban...")
 	pass := getSudoPass(flags)
+	pkgMgr := getPackageManager(conn)
 
 	// Update & Install
-	// Split into separate commands because RunSudo logic might not handle && well if not wrapped in sh -c
-	result := conn.RunSudo("apt-get update", pass); if !result.Success {
-		return fmt.Errorf("failed to update apt: %s", result.Stderr)
+	updateCmd, _ := pkgMgr.Update()
+	result := conn.RunSudo(updateCmd, pass)
+	if !result.Success {
+		return fmt.Errorf("failed to update package lists: %s", result.Stderr)
 	}
-	result = conn.RunSudo("apt-get install -y fail2ban", pass); if !result.Success {
+	installCmd, err := pkgMgr.Install("fail2ban")
+	if err != nil {
+		return err
+	}
+	result = conn.RunSudo(installCmd, pass)
+	if !result.Success {
+		return fmt.Errorf("failed to install fail2ban: %s", result.Stderr)
+	}
+	result = conn.RunSudo("apt-get install -y fail2ban", pass)
+	if !result.Success {
 		return fmt.Errorf("failed to install fail2ban: %s", result.Stderr)
 	}
 
 	// Ensure service is running
-	result = conn.RunSudo("systemctl enable fail2ban", pass); if !result.Success {
+	result = conn.RunSudo("systemctl enable fail2ban", pass)
+	if !result.Success {
 		return fmt.Errorf("failed to enable fail2ban: %s", result.Stderr)
 	}
-	result = conn.RunSudo("systemctl start fail2ban", pass); if !result.Success {
+	result = conn.RunSudo("systemctl start fail2ban", pass)
+	if !result.Success {
 		return fmt.Errorf("failed to start fail2ban: %s", result.Stderr)
 	}
 
@@ -174,4 +187,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return v.(string)
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -55,9 +57,9 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 	}
 }
 
-func (p *Plugin) Start(ctx context.Context) error                { return nil }
-func (p *Plugin) Stop(ctx context.Context) error                 { return nil }
-func (p *Plugin) GetRootCommand() *cobra.Command                 { return nil }
+func (p *Plugin) Start(ctx context.Context) error { return nil }
+func (p *Plugin) Stop(ctx context.Context) error  { return nil }
+func (p *Plugin) GetRootCommand() *cobra.Command  { return nil }
 
 func (p *Plugin) GetCommands() []plugin.Command {
 	return []plugin.Command{
@@ -99,14 +101,28 @@ func (p *Plugin) GetCommands() []plugin.Command {
 func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("💾 Installing Restic...")
 	pass := getSudoPass(flags)
+	pkgMgr := getPackageManager(conn)
 
 	// Update
-	result := conn.RunSudo("apt-get update", pass); if !result.Success {
-		return fmt.Errorf("apt update failed: %s", result.Stderr)
+	updateCmd, _ := pkgMgr.Update()
+	result := conn.RunSudo(updateCmd, pass)
+	if !result.Success {
+		return fmt.Errorf("package update failed: %s", result.Stderr)
 	}
 
 	// Install
-	result = conn.RunSudo("apt-get install -y restic", pass); if !result.Success {
+	installCmd, err := pkgMgr.Install("restic")
+	if err != nil {
+		return err
+	}
+	result = conn.RunSudo(installCmd, pass)
+	if !result.Success {
+		return fmt.Errorf("installation failed: %s", result.Stderr)
+	}
+
+	// Install
+	result = conn.RunSudo("apt-get install -y restic", pass)
+	if !result.Success {
 		return fmt.Errorf("installation failed: %s", result.Stderr)
 	}
 
@@ -174,7 +190,8 @@ export RESTIC_PASSWORD="%s"
 	// We run directly as root? or standard user? standard user might not read /etc/vps-init/restic.env if 600 root
 	// Let's run as root for now since backups usually need root to read all files
 	fmt.Println("🚀 Initializing backend...")
-	result := conn.RunSudo(cmd, pass); if !result.Success {
+	result := conn.RunSudo(cmd, pass)
+	if !result.Success {
 		if strings.Contains(result.Stderr, "config file already exists") || strings.Contains(result.Stdout, "already initialized") {
 			fmt.Println("⚠️  Repository already initialized.")
 		} else {
@@ -338,7 +355,8 @@ func (p *Plugin) performBackup(conn plugin.Connection, targetDB DatabaseInfo, su
 	// Pipe to Restic
 	fullCmd := fmt.Sprintf("bash -c 'source /etc/vps-init/restic.env && %s | restic backup --stdin --stdin-filename %s.%s'", dumpCmd, targetDB.Name, ext)
 
-	result := conn.RunSudo(fullCmd, sudoPass); if !result.Success {
+	result := conn.RunSudo(fullCmd, sudoPass)
+	if !result.Success {
 		return fmt.Errorf("backup failed: %s", result.Stderr)
 	}
 
@@ -718,7 +736,8 @@ func (p *Plugin) restoreDbHandler(ctx context.Context, conn plugin.Connection, a
 		}
 	}
 
-	result = conn.RunSudo(restoreCmd, pass); if !result.Success {
+	result = conn.RunSudo(restoreCmd, pass)
+	if !result.Success {
 		return fmt.Errorf("restore failed: %s", result.Stderr)
 	}
 
@@ -741,4 +760,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return v.(string)
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

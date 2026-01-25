@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -27,7 +29,6 @@ func (p *Plugin) Version() string {
 func (p *Plugin) Author() string {
 	return "VPS-Init Team"
 }
-
 
 func (p *Plugin) Initialize(config map[string]interface{}) error {
 	return nil
@@ -133,7 +134,6 @@ func (p *Plugin) GetRootCommand() *cobra.Command {
 	return nil
 }
 
-
 func (p *Plugin) Start(ctx context.Context) error {
 	return nil
 }
@@ -156,13 +156,19 @@ func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, arg
 
 	// Update package list
 	fmt.Println("Updating package list...")
-	if result := conn.RunSudo("apt update", sudoPass); !result.Success {
+	pkgMgr := getPackageManager(conn)
+	updateCmd, _ := pkgMgr.Update()
+	if result := conn.RunSudo(updateCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to update package list: %w", result.GetError())
 	}
 
 	// Install Redis
 	fmt.Println("Installing Redis server...")
-	if result := conn.RunSudo("apt install -y redis-server", sudoPass); !result.Success {
+	installCmd, err := pkgMgr.Install("redis-server")
+	if err != nil {
+		return err
+	}
+	if result := conn.RunSudo(installCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to install Redis: %w", result.GetError())
 	}
 
@@ -196,7 +202,12 @@ func (p *Plugin) uninstallHandler(ctx context.Context, conn plugin.Connection, a
 
 	// Remove Redis package
 	fmt.Println("Removing Redis server package...")
-	if result := conn.RunSudo("apt remove --purge -y redis-server redis-tools", sudoPass); !result.Success {
+	pkgMgr := getPackageManager(conn)
+	removeCmd, err := pkgMgr.Remove("redis-server", "redis-tools")
+	if err != nil {
+		return err
+	}
+	if result := conn.RunSudo(removeCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to remove Redis packages: %w", result.GetError())
 	}
 
@@ -483,4 +494,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return pass
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

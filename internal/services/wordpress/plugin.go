@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -65,9 +67,9 @@ func (p *Plugin) GetMetadata() plugin.PluginMetadata {
 	}
 }
 
-func (p *Plugin) Start(ctx context.Context) error                { return nil }
-func (p *Plugin) Stop(ctx context.Context) error                 { return nil }
-func (p *Plugin) GetRootCommand() *cobra.Command                 { return nil }
+func (p *Plugin) Start(ctx context.Context) error { return nil }
+func (p *Plugin) Stop(ctx context.Context) error  { return nil }
+func (p *Plugin) GetRootCommand() *cobra.Command  { return nil }
 
 func (p *Plugin) GetCommands() []plugin.Command {
 	return []plugin.Command{
@@ -89,13 +91,19 @@ func (p *Plugin) GetCommands() []plugin.Command {
 func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	fmt.Println("🐘 Installing PHP and Dependencies...")
 	pass := getSudoPass(flags)
+	pkgMgr := getPackageManager(conn)
 
 	// Update
-	conn.RunSudo("apt-get update", pass)
+	updateCmd, _ := pkgMgr.Update()
+	conn.RunSudo(updateCmd, pass)
 
 	// Install PHP (and common Extensions), Curl, Unzip
-	pkgs := "php-fpm php-mysql php-curl php-gd php-mbstring php-xml php-xmlrpc php-soap php-intl php-zip unzip curl"
-	if result := conn.RunSudo(fmt.Sprintf("apt-get install -y %s", pkgs), pass); !result.Success {
+	pkgs := []string{"php-fpm", "php-mysql", "php-curl", "php-gd", "php-mbstring", "php-xml", "php-xmlrpc", "php-soap", "php-intl", "php-zip", "unzip", "curl"}
+	installCmd, err := pkgMgr.Install(pkgs...)
+	if err != nil {
+		return err
+	}
+	if result := conn.RunSudo(installCmd, pass); !result.Success {
 		return fmt.Errorf("php install failed: %s", result.Stderr)
 	}
 
@@ -181,7 +189,8 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn plugin.Connection, 
 		fmt.Sprintf("mysql -u root -e \"GRANT ALL PRIVILEGES ON %s.* TO '%s'@'localhost'; FLUSH PRIVILEGES;\"", dbName, dbUser),
 	}
 	for _, cmd := range cmds {
-		result := conn.RunSudo(cmd, pass); if !result.Success {
+		result := conn.RunSudo(cmd, pass)
+		if !result.Success {
 			return fmt.Errorf("db step failed: %s", result.Stderr)
 		}
 	}
@@ -252,7 +261,8 @@ func (p *Plugin) createSiteHandler(ctx context.Context, conn plugin.Connection, 
 `, domain, webRoot, phpSock)
 
 	tmpNginx := fmt.Sprintf("/tmp/nginx_%s", domain)
-	err := conn.WriteFile(nginxConf, tmpNginx); if err != nil {
+	err := conn.WriteFile(nginxConf, tmpNginx)
+	if err != nil {
 		return fmt.Errorf("failed to write nginx config: %v", err)
 	}
 
@@ -276,4 +286,9 @@ func getSudoPass(flags map[string]interface{}) string {
 		return v.(string)
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
 }

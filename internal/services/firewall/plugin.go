@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	
+
+	"github.com/wasilwamark/vps-init/internal/distro"
+	"github.com/wasilwamark/vps-init/internal/pkgmgr"
 	"github.com/wasilwamark/vps-init/pkg/plugin"
 )
 
@@ -217,25 +219,47 @@ func (p *Plugin) Stop(ctx context.Context) error {
 // Command handlers
 func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
 	sudoPass := getSudoPass(flags)
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
 
-	fmt.Println("🔥 Installing UFW firewall...")
+	fmt.Println("🔥 Installing firewall...")
 
 	// Check if UFW is already installed
-	if result := conn.RunCommand("ufw --version", plugin.WithHideOutput()); result.Success {
-		fmt.Println("✅ UFW is already installed")
-		return nil
+	if distroInfo.Family == distro.DistroFamilyDebian {
+		if result := conn.RunCommand("ufw --version", plugin.WithHideOutput()); result.Success {
+			fmt.Println("✅ UFW is already installed")
+			return nil
+		}
+	} else if distroInfo.Family == distro.DistroFamilyRedHat {
+		if result := conn.RunCommand("firewall-cmd --version", plugin.WithHideOutput()); result.Success {
+			fmt.Println("✅ Firewalld is already installed")
+			return nil
+		}
 	}
 
 	// Update package list
 	fmt.Println("Updating package list...")
-	if result := conn.RunSudo("apt update", sudoPass); !result.Success {
+	pkgMgr := getPackageManager(conn)
+	updateCmd, _ := pkgMgr.Update()
+	if result := conn.RunSudo(updateCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to update package list: %w", result.GetError())
 	}
 
-	// Install UFW
-	fmt.Println("Installing UFW...")
-	if result := conn.RunSudo("apt install -y ufw", sudoPass); !result.Success {
-		return fmt.Errorf("failed to install UFW: %w", result.GetError())
+	// Install firewall
+	fmt.Println("Installing firewall...")
+	var pkgName string
+	if distroInfo.Family == distro.DistroFamilyDebian {
+		pkgName = "ufw"
+	} else if distroInfo.Family == distro.DistroFamilyRedHat {
+		pkgName = "firewalld"
+	} else {
+		pkgName = "ufw"
+	}
+	installCmd, err := pkgMgr.Install(pkgName)
+	if err != nil {
+		return err
+	}
+	if result := conn.RunSudo(installCmd, sudoPass); !result.Success {
+		return fmt.Errorf("failed to install firewall: %w", result.GetError())
 	}
 
 	// Set default policy
@@ -494,4 +518,19 @@ func getSudoPass(flags map[string]interface{}) string {
 		return pass
 	}
 	return ""
+}
+
+func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	return pkgmgr.GetPackageManager(distroInfo)
+}
+
+func getFirewallCmd(conn plugin.Connection) string {
+	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
+	if distroInfo.Family == distro.DistroFamilyDebian {
+		return "ufw"
+	} else if distroInfo.Family == distro.DistroFamilyRedHat {
+		return "firewall-cmd"
+	}
+	return "ufw"
 }
