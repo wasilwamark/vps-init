@@ -154,6 +154,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, arg
 	pkgMgr := getPackageManager(conn)
 
 	updateCmd, _ := pkgMgr.Update()
+	logCommand(updateCmd)
 	if result := conn.RunSudo(updateCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to update package lists: %s", result.Stderr)
 	}
@@ -162,6 +163,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, arg
 	if err != nil {
 		return err
 	}
+	logCommand(installCmd)
 	if result := conn.RunSudo(installCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to install nginx: %s", result.Stderr)
 	}
@@ -484,5 +486,14 @@ func getSudoPass(flags map[string]interface{}) string {
 
 func getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
 	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
-	return pkgmgr.GetPackageManager(distroInfo)
+
+	pkgMgr := pkgmgr.GetPackageManager(distroInfo)
+	fmt.Printf("ℹ️  Detected Distribution: %s %s\n", distroInfo.Name, distroInfo.Version)
+	fmt.Printf("📦 Using Package Manager: %s\n", distroInfo.PackageMgr)
+
+	return pkgMgr
+}
+
+func logCommand(cmd string) {
+	fmt.Printf("⚡ Executing: %s\n", cmd)
 }

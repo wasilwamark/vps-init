@@ -221,7 +221,8 @@ func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, arg
 	sudoPass := getSudoPass(flags)
 	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
 
-	fmt.Println("🔥 Installing firewall...")
+	fmt.Printf("ℹ️  Detected Distribution: %s %s\n", distroInfo.Name, distroInfo.Version)
+	fmt.Printf("🔥 Installing firewall (detected: %s)...\n", distroInfo.Family)
 
 	// Check if UFW is already installed
 	if distroInfo.Family == distro.DistroFamilyDebian {
@@ -240,6 +241,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, arg
 	fmt.Println("Updating package list...")
 	pkgMgr := getPackageManager(conn)
 	updateCmd, _ := pkgMgr.Update()
+	fmt.Printf("⚡ Executing: %s\n", updateCmd)
 	if result := conn.RunSudo(updateCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to update package list: %w", result.GetError())
 	}
@@ -258,6 +260,7 @@ func (p *Plugin) installHandler(ctx context.Context, conn plugin.Connection, arg
 	if err != nil {
 		return err
 	}
+	fmt.Printf("⚡ Executing: %s\n", installCmd)
 	if result := conn.RunSudo(installCmd, sudoPass); !result.Success {
 		return fmt.Errorf("failed to install firewall: %w", result.GetError())
 	}

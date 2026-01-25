@@ -508,7 +508,7 @@ server {
 	keycloakDir := "/opt/keycloak"
 
 	// Update docker-compose.yml to enable HTTPS
-	updateCmd := fmt.Sprintf(`cd %s && sed -i 's/KC_HOSTNAME_STRICT_HTTPS: false/KC_HOSTNAME_STRICT_HTTPS: true/' docker-compose.yml`, keycloakDir)
+	updateCmd := fmt.Sprintf("cd %s && sed -i +e 's/KC_HOSTNAME_STRICT_HTTPS: false/KC_HOSTNAME_STRICT_HTTPS: true/' docker-compose.yml", keycloakDir)
 	conn.RunCommand(updateCmd, plugin.WithHideOutput())
 
 	// Restart Keycloak to apply changes

@@ -166,7 +166,16 @@ func (p *Plugin) checkSudoResult(result plugin.Result, flags map[string]interfac
 // Helper to get package manager for connection
 func (p *Plugin) getPackageManager(conn plugin.Connection) pkgmgr.PackageManager {
 	distroInfo := conn.GetDistroInfo().(*distro.DistroInfo)
-	return pkgmgr.GetPackageManager(distroInfo)
+
+	pkgMgr := pkgmgr.GetPackageManager(distroInfo)
+	fmt.Printf("ℹ️  Detected Distribution: %s %s\n", distroInfo.Name, distroInfo.Version)
+	fmt.Printf("📦 Using Package Manager: %s\n", distroInfo.PackageMgr)
+
+	return pkgMgr
+}
+
+func (p *Plugin) logCommand(cmd string) {
+	fmt.Printf("⚡ Executing: %s\n", cmd)
 }
 
 func (p *Plugin) handleUpdate(ctx context.Context, conn plugin.Connection, args []string, flags map[string]interface{}) error {
@@ -175,6 +184,7 @@ func (p *Plugin) handleUpdate(ctx context.Context, conn plugin.Connection, args 
 	sudoPass, _ := flags["sudo-password"].(string)
 	pkgMgr := p.getPackageManager(conn)
 	cmd, _ := pkgMgr.Update()
+	p.logCommand(cmd)
 	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
@@ -191,6 +201,7 @@ func (p *Plugin) handleUpgrade(ctx context.Context, conn plugin.Connection, args
 	sudoPass, _ := flags["sudo-password"].(string)
 	pkgMgr := p.getPackageManager(conn)
 	cmd, _ := pkgMgr.Upgrade()
+	p.logCommand(cmd)
 	result := conn.RunSudo(cmd, sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
@@ -206,6 +217,7 @@ func (p *Plugin) handleFullUpgrade(ctx context.Context, conn plugin.Connection, 
 	sudoPass, _ := flags["sudo-password"].(string)
 	pkgMgr := p.getPackageManager(conn)
 	cmd, _ := pkgMgr.DistUpgrade()
+	p.logCommand(cmd)
 	result := conn.RunSudo(cmd, sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
@@ -221,6 +233,7 @@ func (p *Plugin) handleAutoremove(ctx context.Context, conn plugin.Connection, a
 	sudoPass, _ := flags["sudo-password"].(string)
 	pkgMgr := p.getPackageManager(conn)
 	cmd, _ := pkgMgr.Autoremove()
+	p.logCommand(cmd)
 	result := conn.RunSudo(cmd, sudoPass)
 	if err := p.checkSudoResult(result, flags); err != nil {
 		return err
@@ -249,6 +262,7 @@ func (p *Plugin) handleInstall(ctx context.Context, conn plugin.Connection, args
 	if err != nil {
 		return err
 	}
+	p.logCommand(cmd)
 	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
@@ -273,6 +287,7 @@ func (p *Plugin) handleUninstall(ctx context.Context, conn plugin.Connection, ar
 	if err != nil {
 		return err
 	}
+	p.logCommand(cmd)
 	result := conn.RunSudo(cmd, sudoPass)
 
 	if err := p.checkSudoResult(result, flags); err != nil {
